@@ -862,3 +862,23 @@ QList<DbManager::PayrollEntryInfo> DbManager::getPayrollEntryInfo(int payroll_id
 
     return ret;
 }
+
+DbManager::WorkType DbManager::getWorkTypeFromName(QString name)
+{
+    WorkType ret = {};
+    ret.id = -1;
+    QSqlQuery query(m_db);
+    query.prepare("SELECT id, default_pay, is_active FROM work_type WHERE description = (:desc)");
+    query.bindValue(":desc", name);
+
+    query.exec();
+
+    if (query.next()) {
+        ret.description = name;
+        ret.id = query.value(0).toInt();
+        ret.default_pay = query.value(1).toInt();
+        ret.is_active = query.value(2).toBool();
+    }
+
+    return ret;
+}

@@ -156,6 +156,8 @@ public:
 
     DbManager::EmployeeInfo getEmployeeFromName(QString surname, QString name);
 
+    DbManager::WorkType getWorkTypeFromName(QString name);
+
     void removeDailyRecord(int id);
 
     void updateDailyRecord(DbManager::DailyRecord record);
