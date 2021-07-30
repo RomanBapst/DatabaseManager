@@ -100,6 +100,8 @@ public:
 
     void closeDataBase();
 
+    void triggerDataBaseChanged() { emit dataBaseChanged(); }
+
     void addEmployee(EmployeeInfo info);
 
     void setCompanyInfo(CompanyInfo info);
