@@ -183,8 +183,6 @@ void DbManager::setupDatabase(QString path, QString name)
          if(!query.isActive()) {
              qWarning() << "ERROR: " << query.lastError().text();
          }
-
-
     }
 }
 
@@ -208,8 +206,6 @@ void DbManager::addEmployee(DbManager::EmployeeInfo info)
    query.bindValue(":tin_number", info.tin_number);
    query.bindValue(":nida_number", info.nida_number);
    query.exec();
-
-   emit dataBaseChanged();
 }
 
 void DbManager::setCompanyInfo(DbManager::CompanyInfo info)
@@ -220,7 +216,6 @@ void DbManager::setCompanyInfo(DbManager::CompanyInfo info)
     query.first();
 
     if (query.value(0).toInt() > 0) {
-        qInfo() << "going in here";
         query.prepare("UPDATE company_info SET name = ?, postal_number = ?, postal_city = ?, location = ?, phone_number = ?, email = ?, tin_number = ?, nssf_nr = ?, nssf_ctrl_nr = ? WHERE id = ?");
         query.addBindValue(info.name);
         query.addBindValue(info.postal_number);
@@ -233,7 +228,6 @@ void DbManager::setCompanyInfo(DbManager::CompanyInfo info)
         query.addBindValue(info.nssf_ctrl_nr);
         query.addBindValue(1);  // there will only ever be one entry and the ID is 1
         query.exec();
-         qDebug() << "SqLite error:" << query.lastError().text();
     } else {
         query.prepare("INSERT INTO company_info (name, postal_number, postal_city, location, phone_number, email, tin_number )"
                       "VALUES (:name, :postal_number, :postal_city, :location, :phone_number, :email, :tin_number)");
@@ -267,7 +261,6 @@ DbManager::CompanyInfo DbManager::getCompanyInfo()
         ret.tin_number = query.value(7).toString();
         ret.nssf_reg_nr = query.value(8).toString();
         ret.nssf_ctrl_nr = query.value(9).toString();
-
       }
 
     return ret;
@@ -407,10 +400,6 @@ void DbManager::updatePayrollEntry(int payroll_id, DbManager::PayrollEntryInfo i
     query.addBindValue(info.employee_id);
 
     query.exec();
-
-    //emit dataBaseChanged();
-
-    qDebug() << "SqLite error:" << query.lastError().text();
 }
 
 void DbManager::removePayrollByID(int payroll_id)
@@ -435,8 +424,6 @@ void DbManager::removePayrollEntry(int payroll_id, int employee_id)
     query.addBindValue(employee_id);
     query.exec();
 
-    //qDebug() << "SqLite error:" << query.lastError().text();
-
     emit dataBaseChanged();
 }
 
@@ -446,8 +433,6 @@ void DbManager::removeByID(int id)
     query.exec("DELETE FROM employees WHERE (id = ?)");
     query.addBindValue(id);
     query.exec();
-
-    //qDebug() << "SqLite error:" << query.lastError().text();
 
     emit dataBaseChanged();
 }
@@ -609,8 +594,6 @@ DbManager::EmployeeInfo DbManager::getEmployeeFromName(QString surname, QString 
 }
 
     return ret;
-
-
 }
 
 DbManager::EmployeeInfo DbManager::getEmployeeInfo(int id)
@@ -635,12 +618,11 @@ DbManager::EmployeeInfo DbManager::getEmployeeInfo(int id)
     ret.salary_fixed = query.value(8).toInt();
     ret.department = query.value(9).toInt();
     ret.nssf_number = query.value(10).toString();
-    ret.is_active = query.value(11) > 0;
+    ret.is_active = query.value(11).toBool();
     ret.tin_number = query.value(12).toString();
     ret.nida_number = query.value(13).toString();
 
     return ret;
-
 }
 
 DbManager::WorkType DbManager::getWorkType(int id)
@@ -657,7 +639,6 @@ DbManager::WorkType DbManager::getWorkType(int id)
     ret.is_active = query.value(3).toBool();
 
     return ret;
-
 }
 
 DbManager::DailyRecord DbManager::getDailyRecord(int id)
@@ -703,7 +684,6 @@ QList<DbManager::DailyRecord> DbManager::getDailyRecordForDateAndEmployeeID(QDat
     }
 
     return ret_list;
-
 }
 
 QList<DbManager::DailyRecord> DbManager::getDailyRecordForDateAndWorkType(QDate date, int work_id)
@@ -730,7 +710,6 @@ QList<DbManager::DailyRecord> DbManager::getDailyRecordForDateAndWorkType(QDate 
     }
 
     return ret_list;
-
 }
 
 QList<DbManager::DailyRecord> DbManager::getDailyRecordForDate(QDate date)
@@ -743,7 +722,6 @@ QList<DbManager::DailyRecord> DbManager::getDailyRecordForDate(QDate date)
 
     QList<DailyRecord> ret_list = {};
     while (query.next()) {
-
         DailyRecord ret = {};
         ret.id = query.value(0).toInt();
         ret.date = date;
@@ -772,7 +750,6 @@ QList<DbManager::WorkType> DbManager::getWorkTypeListForDate(QDate date)
     }
 
     return work_list_ret;
-
 }
 
 
@@ -830,7 +807,6 @@ DbManager::PayrollInfo DbManager::getPayrollInfoByID(int id)
     ret.name = query.value(3).toString();
 
     return ret;
-
 }
 
 QList<DbManager::PayrollEntryInfo> DbManager::getPayrollEntryInfo(int payroll_id)
