@@ -32,6 +32,7 @@ void DbManager::setupDatabase(QString path, QString name)
     if (!m_db.open())
     {
         qDebug() << "Error: connection with database fail";
+        return;
     } else
     {
         qDebug() << "Database: connection ok";
@@ -41,10 +42,6 @@ void DbManager::setupDatabase(QString path, QString name)
         query.prepare("CREATE TABLE employees (id INTEGER PRIMARY KEY, surname TEXT, name TEXT, nssf INTEGER DEFAULT 0,"
                         "tipau INTEGER DEFAULT 0, sdl INTEGER DEFAULT 0, paye INTEGER DEFAULT 0, rate_normal INTEGER DEFAULT 0, salary_fixed INTEGER DEFAULT 0, department INTEGER DEFAULT 0, nssf_number TEXT)");
         query.exec();
-
-        if(!query.isActive()) {
-            qWarning() << "ERROR: " << query.lastError().text();
-        }
 
         query.exec("PRAGMA table_info(employees)");
 
@@ -88,25 +85,13 @@ void DbManager::setupDatabase(QString path, QString name)
             query.exec("ALTER TABLE employees ADD COLUMN nida_number TEXT");
         }
 
-        if(!query.isActive()) {
-            qWarning() << "ERROR: " << query.lastError().text();
-        }
-
         query.prepare("CREATE TABLE payroll_list (id INTEGER PRIMARY KEY, start_date, end_date DATE, name TEXT)");
         query.exec();
-
-        if(!query.isActive()) {
-            qWarning() << "ERROR: " << query.lastError().text();
-        }
 
         query.prepare("CREATE TABLE payroll_entry (payroll_id INTEGER, employee_id INTEGER, nssf INTEGER DEFAULT 0, tipau INTEGER DEFAULT 0,"
                       "sdl INTEGER DEFAULT 0, paye INTEGER DEFAULT 0, days_normal INTEGER DEFAULT 0, rate_normal INTEGER DEFAULT 0, days_special INTEGER DEFAULT 0, rate_special INTEGER DEFAULT 0,"
                       "sugar_cane_related INTEGER DEFAULT 0,  auxilliary INTEGER DEFAULT 0, salary_fixed INTEGER DEFAULT 0)");
         query.exec();
-
-        if(!query.isActive()) {
-            qWarning() << "ERROR: " << query.lastError().text();
-        }
 
 
         query.exec("PRAGMA table_info(payroll_entry)");
@@ -134,17 +119,9 @@ void DbManager::setupDatabase(QString path, QString name)
             query.exec("ALTER TABLE payroll_entry ADD COLUMN overtime INTEGER");
         }
 
-        if(!query.isActive()) {
-            qWarning() << "ERROR: " << query.lastError().text();
-        }
-
          query.prepare("CREATE TABLE company_info (id INTEGER PRIMARY KEY, name TEXT, postal_number TEXT, postal_city TEXT, location TEXT, phone_number TEXT, email TEXT, tin_number TEXT)");
 
          query.exec();
-
-         if(!query.isActive()) {
-             qWarning() << "ERROR: " << query.lastError().text();
-         }
 
          query.exec("PRAGMA table_info(payroll_entry)");
 
@@ -173,16 +150,8 @@ void DbManager::setupDatabase(QString path, QString name)
          query.prepare("CREATE TABLE daily_record (id INTEGER PRIMARY KEY, date DATE, employee_id INTEGER, work_type INTEGER, pay INTEGER, location INTEGER, description TEXT)");
          query.exec();
 
-         if(!query.isActive()) {
-             qWarning() << "ERROR: " << query.lastError().text();
-         }
-
          query.prepare("CREATE TABLE work_type (id INTEGER PRIMARY KEY, description TEXT, default_pay INTEGER, is_active INTEGER)");
          query.exec();
-
-         if(!query.isActive()) {
-             qWarning() << "ERROR: " << query.lastError().text();
-         }
     }
 }
 
@@ -324,10 +293,9 @@ void DbManager::addPayrollEntry(int payroll_id, PayrollEntryInfo info)
 void DbManager::addWorkType(WorkType work_type)
 {
     QSqlQuery query(m_db);
-    query.prepare("INSERT INTO work_type (id, description, default_pay, is_active) "
-                  "VALUES (:id ,:description, :default_pay, :is_active)");
+    query.prepare("INSERT INTO work_type (description, default_pay, is_active) "
+                  "VALUES (:description, :default_pay, :is_active)");
 
-    query.bindValue(":id", work_type.id);
     query.bindValue(":description", work_type.description);
     query.bindValue(":default_pay", work_type.default_pay);
     query.bindValue(":is_active", work_type.is_active ? 1 : 0);
