@@ -20,6 +20,27 @@ void DbManager::closeDataBase()
     m_db.removeDatabase( QSqlDatabase::defaultConnection);
 }
 
+QStringList DbManager::getTableItems(QString table)
+{
+    QSqlQuery query(m_db);
+
+    query.exec("PRAGMA table_info(" + table +")");
+
+    QStringList ret = {};
+
+    while (query.next()) {
+        ret.append(query.value(1).toString());
+    }
+
+    return ret;
+}
+
+void DbManager::addColumnToTable(QString table, QString column, QString data_type)
+{
+    QSqlQuery query(m_db);
+    query.exec(QString("ALTER TABLE %1 ADD COLUMN %2 %3").arg(table).arg(column).arg(data_type));
+}
+
 void DbManager::setupDatabase(QString path, QString name)
 {
     if (m_db.isOpen()) {
@@ -41,6 +62,10 @@ void DbManager::setupDatabase(QString path, QString name)
 
         query.prepare("CREATE TABLE employees (id INTEGER PRIMARY KEY, surname TEXT, name TEXT, nssf INTEGER DEFAULT 0,"
                         "tipau INTEGER DEFAULT 0, sdl INTEGER DEFAULT 0, paye INTEGER DEFAULT 0, rate_normal INTEGER DEFAULT 0, salary_fixed INTEGER DEFAULT 0, department INTEGER DEFAULT 0, nssf_number TEXT)");
+        query.exec();
+
+        query.prepare("CREATE TABLE employees_archived (id INTEGER PRIMARY KEY, surname TEXT, name TEXT, nssf INTEGER DEFAULT 0,"
+                        "tipau INTEGER DEFAULT 0, sdl INTEGER DEFAULT 0, paye INTEGER DEFAULT 0, rate_normal INTEGER DEFAULT 0, salary_fixed INTEGER DEFAULT 0, department INTEGER DEFAULT 0, nssf_number TEXT, is_active INT DEFAULT 0, tin_number TEXT, nida_number TEXT)");
         query.exec();
 
         query.exec("PRAGMA table_info(employees)");
@@ -97,7 +122,8 @@ void DbManager::setupDatabase(QString path, QString name)
         query.exec("PRAGMA table_info(payroll_entry)");
 
         bool found_bonus = false;
-         bool found_overtime = false;
+        bool found_overtime = false;
+        bool found_department_name = false;
 
         while (query.next()) {
             QString column_name = query.value(1).toString();
@@ -109,6 +135,10 @@ void DbManager::setupDatabase(QString path, QString name)
             if (column_name.compare(QString("overtime")) == 0) {
                 found_overtime = true;
             }
+
+            if (column_name.compare(QString("department_name")) == 0) {
+                found_department_name = true;
+            }
         }
 
         if (!found_bonus) {
@@ -119,62 +149,338 @@ void DbManager::setupDatabase(QString path, QString name)
             query.exec("ALTER TABLE payroll_entry ADD COLUMN overtime INTEGER");
         }
 
-         query.prepare("CREATE TABLE company_info (id INTEGER PRIMARY KEY, name TEXT, postal_number TEXT, postal_city TEXT, location TEXT, phone_number TEXT, email TEXT, tin_number TEXT)");
+        if (!found_department_name) {
+             query.exec("ALTER TABLE payroll_entry ADD COLUMN department_name TEXT");
+        }
 
-         query.exec();
+        query.prepare("CREATE TABLE company_info (id INTEGER PRIMARY KEY, name TEXT, postal_number TEXT, postal_city TEXT, location TEXT, phone_number TEXT, email TEXT, tin_number TEXT)");
 
-         query.exec("PRAGMA table_info(payroll_entry)");
+        query.exec();
 
-         bool found_nssf_reg_nr = false;
-         bool found_nssf_ctrl_nr = false;
-         while (query.next()) {
-             QString column_name = query.value(1).toString();
+        query.exec("PRAGMA table_info(payroll_entry)");
 
-             if (column_name.compare(QString("nssf_nr")) == 0) {
-                 found_nssf_reg_nr = true;
-             }
+        bool found_nssf_reg_nr = false;
+        bool found_nssf_ctrl_nr = false;
+        while (query.next()) {
+            QString column_name = query.value(1).toString();
 
-             if (column_name.compare(QString("nssf_ctrl_nr")) == 0) {
-                 found_nssf_ctrl_nr = true;
-             }
-         }
+            if (column_name.compare(QString("nssf_nr")) == 0) {
+                found_nssf_reg_nr = true;
+            }
 
-         if (!found_nssf_reg_nr) {
-             query.exec("ALTER TABLE company_info ADD COLUMN nssf_nr TEXT");
-         }
+            if (column_name.compare(QString("nssf_ctrl_nr")) == 0) {
+                found_nssf_ctrl_nr = true;
+            }
+        }
 
-         if (!found_nssf_ctrl_nr) {
-             query.exec("ALTER TABLE company_info ADD COLUMN nssf_ctrl_nr TEXT");
-         }
+        if (!found_nssf_reg_nr) {
+            query.exec("ALTER TABLE company_info ADD COLUMN nssf_nr TEXT");
+        }
 
-         query.prepare("CREATE TABLE daily_record (id INTEGER PRIMARY KEY, date DATE, employee_id INTEGER, work_type INTEGER, pay INTEGER, location INTEGER, description TEXT)");
-         query.exec();
+        if (!found_nssf_ctrl_nr) {
+            query.exec("ALTER TABLE company_info ADD COLUMN nssf_ctrl_nr TEXT");
+        }
 
-         query.prepare("CREATE TABLE work_type (id INTEGER PRIMARY KEY, description TEXT, default_pay INTEGER, is_active INTEGER)");
-         query.exec();
+        query.prepare("CREATE TABLE daily_record (id INTEGER PRIMARY KEY, date DATE, employee_id INTEGER, work_type INTEGER, pay INTEGER, location INTEGER, description TEXT)");
+        query.exec();
+
+        query.prepare("CREATE TABLE work_type (id INTEGER PRIMARY KEY, description TEXT, default_pay INTEGER, is_active INTEGER)");
+        query.exec();
+
+        query.prepare("CREATE TABLE work_category (hash TEXT PRIMARY KEY, name TEXT, sdl INTEGER)");
+        query.exec();
+
+        createTable("department", department_header, department_types);
+
+//        FilterMap data;
+//        data["department"] = 0;
+//        FilterMap map;
+
+//        updateDataInTable("employees", data, map);
     }
 }
 
-void DbManager::addEmployee(DbManager::EmployeeInfo info)
+void DbManager::createTable(QString table_name, QStringList header, QStringList data_types)
 {
-    QSqlQuery query(m_db);
-    query.prepare("INSERT INTO employees (surname, name, nssf, tipau, sdl, paye, rate_normal, salary_fixed, department, nssf_number, is_active, tin_number, nida_number) "
-                      "VALUES (:surname, :name, :nssf, :tipau, :sdl, :paye, :rate_normal, :salary_fixed, :department, :nssf_number, :is_active, :tin_number, :nida_number)");
+    QString query_string = "CREATE TABLE %1 %2";
 
-   query.bindValue(":surname", info.surname);
-   query.bindValue(":name", info.name);
-   query.bindValue(":nssf", info.nssf ? 1 : 0);
-   query.bindValue(":tipau", info.tipau ? 1 : 0);
-   query.bindValue(":sdl", info.sdl ? 1 : 0);
-   query.bindValue(":paye", info.paye ? 1 : 0);
-   query.bindValue(":rate_normal", info.rate_per_day);
-   query.bindValue(":salary_fixed", info.salary_fixed);
-   query.bindValue(":department", info.department);
-   query.bindValue(":nssf_number", info.nssf_number);
-   query.bindValue(":is_active", info.is_active);
-   query.bindValue(":tin_number", info.tin_number);
-   query.bindValue(":nida_number", info.nida_number);
-   query.exec();
+
+    QString item_data_string = "(";
+    int counter = 0;
+    for (auto item : header){
+
+        if (counter == 0) {
+            item_data_string = item_data_string.append(item + " " + data_types[header.indexOf(item)] + " PRIMARY KEY,");
+        } else {
+            item_data_string = item_data_string.append(item + " " + data_types[header.indexOf(item)] + ",");
+        }
+
+       counter++;
+    }
+
+    item_data_string = item_data_string.remove(item_data_string.size()-1, 1);
+    item_data_string = item_data_string.append(")");
+
+    query_string = query_string.arg(table_name).arg(item_data_string);
+
+     QSqlQuery query(m_db);
+     query.exec(query_string);
+}
+
+QList<QVariantList> DbManager::getDataFromTable(QString table_name, QList<SQLiteColumnInfo> items, QMap<QString, QVariant> map, QString sort_name)
+{
+
+    QString query_string = "SELECT %1 FROM %2 %3 %4";
+
+    QString item_data_string;
+
+    for (auto item : items){
+        item_data_string = item_data_string.append(item.name + ",");
+    }
+
+    item_data_string = item_data_string.remove(item_data_string.size()-1, 1);
+
+
+    QString where_string;
+    if (map.size() > 0) {
+        where_string = "WHERE (";
+
+        for (auto item : map.keys()) {
+            where_string = where_string.append(item + "=? AND ");
+        }
+
+        int index = where_string.lastIndexOf("AND");
+
+        where_string.remove(index, where_string.length() - index);
+
+        where_string = where_string.append(")");
+    }
+
+    QString sorting = "";
+    if (!sort_name.isEmpty()) {
+        sorting = "ORDER BY " + sort_name;
+    }
+
+    query_string = query_string.arg(item_data_string).arg(table_name).arg(where_string).arg(sorting);
+
+    QSqlQuery query(m_db);
+
+    query.prepare(query_string);
+
+    qInfo() << query_string;
+
+    for (auto item : map.keys()) {
+        query.addBindValue(map[item]);
+    }
+
+    query.exec();
+
+    QList<QVariantList> ret;
+
+    while (query.next()) {
+        QVariantList tmp = {};
+        int counter = 0;
+        for (auto item : items) {
+            tmp.append(query.value(counter));
+            counter++;
+        }
+
+        ret.append(tmp);
+    }
+
+    return ret;
+
+}
+
+QList<QVariantList> DbManager::getDataFromTable(QString table_name, QStringList items, QMap<QString, QVariant> map)
+{
+
+    QString query_string = "SELECT %1 FROM %2 %3";
+
+    QString item_data_string;
+
+    for (auto item : items){
+        item_data_string = item_data_string.append(item + ",");
+    }
+
+    item_data_string = item_data_string.remove(item_data_string.size()-1, 1);
+
+
+    QString where_string;
+    if (map.size() > 0) {
+        where_string = "WHERE (";
+
+        for (auto item : map.keys()) {
+            where_string = where_string.append(item + "=? AND ");
+        }
+
+        int index = where_string.lastIndexOf("AND");
+
+        where_string.remove(index, where_string.length() - index);
+
+        where_string = where_string.append(")");
+    }
+
+    query_string = query_string.arg(item_data_string).arg(table_name).arg(where_string);
+
+    QSqlQuery query(m_db);
+
+    query.prepare(query_string);
+
+    for (auto item : map.keys()) {
+        query.addBindValue(map[item]);
+    }
+
+    query.exec();
+
+    QList<QVariantList> ret;
+
+    while (query.next()) {
+        QVariantList tmp = {};
+        int counter = 0;
+        for (auto item : items) {
+            tmp.append(query.value(counter));
+            counter++;
+        }
+
+        ret.append(tmp);
+    }
+
+    return ret;
+
+}
+
+bool DbManager::updateDataInTable(QString table_name, FilterMap data, FilterMap map )
+{
+    QString query_string = "UPDATE %1 SET %2 %3";
+
+    QString item_data_string;
+
+    for (auto &item : data.keys()){
+        item_data_string = item_data_string.append(item + " =?,");
+    }
+
+    item_data_string = item_data_string.remove(item_data_string.size()-1, 1);
+
+
+    QString where_string;
+    if (map.size() > 0) {
+        where_string = "WHERE (";
+
+        for (auto item : map.keys()) {
+            where_string = where_string.append(item + "=? AND ");
+        }
+
+        int index = where_string.lastIndexOf("AND");
+
+        where_string.remove(index, where_string.length() - index);
+
+        where_string = where_string.append(")");
+    }
+
+    query_string = query_string.arg(table_name).arg(item_data_string).arg(where_string);
+
+    QSqlQuery query(m_db);
+
+    query.prepare(query_string);
+
+    for (auto &item : data.keys()) {
+        query.addBindValue(data[item]);
+    }
+
+    for (auto &item : map.keys()) {
+        query.addBindValue(map[item]);
+    }
+
+    query.exec();
+
+    return true;
+}
+
+bool DbManager::deleteDataInTable(QString table_name, QMap<QString, QVariant> filter)
+{
+    QString query_string = "DELETE FROM %1 %2";
+
+    QString item_data_string;
+
+
+    QString where_string;
+    if (filter.size() > 0) {
+        where_string = "WHERE (";
+
+        for (auto item : filter.keys()) {
+            where_string = where_string.append(item + "=? AND ");
+        }
+
+        int index = where_string.lastIndexOf("AND");
+
+        where_string.remove(index, where_string.length() - index);
+
+        where_string = where_string.append(")");
+    }
+
+    query_string = query_string.arg(table_name).arg(where_string);
+
+    QSqlQuery query(m_db);
+
+    query.prepare(query_string);
+
+    for (auto &item : filter.keys()) {
+        query.addBindValue(filter[item]);
+    }
+
+    query.exec();
+
+    return true;
+}
+
+int DbManager::addDataToTable(QString table_name, FilterMap data)
+{
+    QString query_string = "INSERT INTO %1 (%2) VALUES %3";
+
+    QString item_data_string;
+
+    for (auto &item : data.keys()){
+        item_data_string = item_data_string.append(item + ",");
+    }
+
+    item_data_string = item_data_string.remove(item_data_string.size()-1, 1);
+
+
+    QString values_string;
+    if (data.size() > 0) {
+        values_string = "(";
+
+        for (auto item : data.keys()) {
+            values_string = values_string.append(":" + item + ",");
+        }
+
+        values_string = values_string.remove(values_string.size()-1, 1);
+        values_string = values_string.append(")");
+    }
+
+    query_string = query_string.arg(table_name).arg(item_data_string).arg(values_string);
+
+    qInfo() << query_string;
+
+    QSqlQuery query(m_db);
+
+    query.prepare(query_string);
+
+    for (auto &item : data.keys()) {
+        query.addBindValue(data[item]);
+    }
+
+    query.exec();
+
+    return query.lastInsertId().toInt();
+}
+
+void DbManager::addEmployee(DbManager::EmployeeInfo info, QString table_name)
+{
+    FilterMap data = employeeInfoToVariantMap(info);
+    data.remove("id");
+    addDataToTable("employees", data);
 }
 
 void DbManager::setCompanyInfo(DbManager::CompanyInfo info)
@@ -185,291 +491,333 @@ void DbManager::setCompanyInfo(DbManager::CompanyInfo info)
     query.first();
 
     if (query.value(0).toInt() > 0) {
-        query.prepare("UPDATE company_info SET name = ?, postal_number = ?, postal_city = ?, location = ?, phone_number = ?, email = ?, tin_number = ?, nssf_nr = ?, nssf_ctrl_nr = ? WHERE id = ?");
-        query.addBindValue(info.name);
-        query.addBindValue(info.postal_number);
-        query.addBindValue(info.postal_city);
-        query.addBindValue(info.location);
-        query.addBindValue(info.phone_number);
-        query.addBindValue(info.email);
-        query.addBindValue(info.tin_number);
-        query.addBindValue(info.nssf_reg_nr);
-        query.addBindValue(info.nssf_ctrl_nr);
-        query.addBindValue(1);  // there will only ever be one entry and the ID is 1
-        query.exec();
+
+        FilterMap map;
+        map["id"] = 1;
+        info.id = 1;
+        updateDataInTable("company_info", companyInfoToVariantMap(info), map);
+
     } else {
-        query.prepare("INSERT INTO company_info (name, postal_number, postal_city, location, phone_number, email, tin_number )"
-                      "VALUES (:name, :postal_number, :postal_city, :location, :phone_number, :email, :tin_number)");
-
-        query.bindValue(":name", info.name);
-        query.bindValue(":postal_number", info.postal_number);
-        query.bindValue(":postal_city", info.postal_city);
-        query.bindValue(":location", info.location);
-        query.bindValue(":phone_number", info.phone_number);
-        query.bindValue(":email", info.email);
-        query.bindValue(":tin_number", info.tin_number);
-
-        query.exec();
+        FilterMap data = companyInfoToVariantMap(info);
+        data.remove("id");
+        addDataToTable("company_info", data);
     }
 }
 
 DbManager::CompanyInfo DbManager::getCompanyInfo()
 {
     CompanyInfo ret = {};
-    QSqlQuery query(m_db);
-    query.exec("SELECT id, name, postal_number, postal_city, location, phone_number, email, tin_number, nssf_nr, nssf_ctrl_nr FROM company_info");
 
-    while (query.next()) {
+    QList<QVariantList> data = getDataFromTable("company_info", company_info_header, QMap<QString, QVariant>());
 
-        ret.name = query.value(1).toString();
-        ret.postal_number = query.value(2).toString();
-        ret.postal_city = query.value(3).toString();
-        ret.location = query.value(4).toString();
-        ret.phone_number = query.value(5).toString();
-        ret.email = query.value(6).toString();
-        ret.tin_number = query.value(7).toString();
-        ret.nssf_reg_nr = query.value(8).toString();
-        ret.nssf_ctrl_nr = query.value(9).toString();
-      }
-
+    ret = getCompanyInfoFromVariantList(data.first());
     return ret;
 }
 
 int DbManager::addPayroll(PayrollInfo info)
 {
-    QSqlQuery query(m_db);
-    query.prepare("INSERT INTO payroll_list (start_date, end_date, name) "
-                      "VALUES (:start_date, :end_date, :name)");
 
-   query.bindValue(":start_date", info.start_date.toString("yyyy-MM-dd"));
-   query.bindValue(":end_date", info.end_date.toString("yyyy-MM-dd"));
-   query.bindValue(":name", info.name);
-
-   query.exec();
-
-   int id = query.lastInsertId().toInt();
-
-
-   emit dataBaseChanged();
-   return id;
-
+    QMap<QString, QVariant> map = payrollInfoToVariantMap(info);
+    map.remove("id");
+    int id = addDataToTable("payroll_list", map);
+    emit dataBaseChanged();
+    return id;
 }
 
 void DbManager::updatePayroll(DbManager::PayrollInfo info)
 {
-    QSqlQuery query(m_db);
-    query.prepare("UPDATE payroll_list SET start_date = ?, end_date = ?, name = ? WHERE (id = ?)");
-    query.addBindValue(info.start_date);
-    query.addBindValue(info.end_date);
-    query.addBindValue(info.name);
-    query.addBindValue(info.id);
-    query.exec();
+    FilterMap map;
+    map["id"] = info.id;
+
+    updateDataInTable("payroll_list", payrollInfoToVariantMap(info), map);
 }
 
 void DbManager::addPayrollEntry(int payroll_id, PayrollEntryInfo info)
 {
-    QSqlQuery query(m_db);
-    query.prepare("INSERT INTO payroll_entry (payroll_id, employee_id, nssf, tipau, sdl, paye, days_normal, rate_normal, days_special, rate_special, sugar_cane_related, auxilliary, salary_fixed, bonus, overtime) "
-                      "VALUES (:pid, :eid, :nssf, :tipau, :sdl, :paye, :days_normal, :rate_normal, :days_special, :rate_special, :sugar_cane_related, :auxilliary, :salary_fixed, :bonus, :overtime)");
-
-   query.bindValue(":pid", payroll_id);
-   query.bindValue(":eid", info.employee_id);
-   query.bindValue(":nssf", info.has_nssf ? 1 : 0);
-   query.bindValue(":tipau", info.has_tipau ? 1 : 0);
-   query.bindValue(":sdl", info.has_sdl ? 1 : 0);
-   query.bindValue(":paye", info.has_paye ? 1 : 0);
-   query.bindValue(":days_normal", info.days_normal);
-   query.bindValue(":rate_normal", info.rate_normal);
-   query.bindValue(":days_special", info.days_special);
-   query.bindValue(":rate_special", info.rate_special);
-   query.bindValue(":sugar_cane_related", info.sugar_cane_related);
-   query.bindValue(":auxilliary", info.auxilliary_amount);
-   query.bindValue(":salary_fixed", info.salary_fixed);
-   query.bindValue(":bonus", info.bonus);
-   query.bindValue(":overtime", info.overtime);
-   query.exec();
+    info.payroll_id = payroll_id;
+    addDataToTable("payroll_entry", payrollEntryInfoToVariantMap(info));
 }
 
 void DbManager::addWorkType(WorkType work_type)
 {
-    QSqlQuery query(m_db);
-    query.prepare("INSERT INTO work_type (description, default_pay, is_active) "
-                  "VALUES (:description, :default_pay, :is_active)");
 
-    query.bindValue(":description", work_type.description);
-    query.bindValue(":default_pay", work_type.default_pay);
-    query.bindValue(":is_active", work_type.is_active ? 1 : 0);
-
-    query.exec();
+    addDataToTable("work_type", workTypeToVariantMap(work_type));
 
     emit dataBaseChanged();
 }
 
-
-
 void DbManager::addDailyRecord(DbManager::DailyRecord record)
 {
 
-    QSqlQuery query(m_db);
-    query.prepare("INSERT INTO daily_record (date, employee_id, work_type, pay, location, description) "
-                  "VALUES (:date, :employee_id, :work_type, :pay, :location, :description)");
-
-    query.bindValue(":date", record.date);
-    query.bindValue(":employee_id", record.employee_id);
-    query.bindValue(":work_type", record.work_type_id);
-    query.bindValue(":pay", record.pay);
-    query.bindValue(":location", record.location);
-    query.bindValue(":description", record.description);
-
-    query.exec();
+    addDataToTable("daily_record", dailyRecordToVariantMap(record));
 }
 
 void DbManager::removeDailyRecord(int id)
 {
-    QSqlQuery query(m_db);
-    query.prepare("DELETE FROM daily_record WHERE (id = ?)");
-    query.addBindValue(id);
-    query.exec();
+    FilterMap map;
+    map["id"] = id;
+    deleteDataInTable("daily_record", map);
 }
 
 void DbManager::updateDailyRecord(DbManager::DailyRecord record)
 {
-    QSqlQuery query(m_db);
-    query.prepare("UPDATE daily_record SET date = ?, employee_id = ?, work_type = ?, pay = ?, location = ?, description = ? WHERE id = ?");
-    query.addBindValue(record.date);
-    query.addBindValue(record.employee_id);
-    query.addBindValue(record.work_type_id);
-    query.addBindValue(record.pay);
-    query.addBindValue(record.location);
-    query.addBindValue(record.description);
-    query.addBindValue(record.id);
-
-    query.exec();
+    FilterMap map;
+    map["id"] = record.id;
+    updateDataInTable("daily_record", dailyRecordToVariantMap(record), map);
 }
 
 void DbManager::updatePayrollEntry(int payroll_id, DbManager::PayrollEntryInfo info)
 {
-    QSqlQuery query(m_db);
-    query.prepare("UPDATE payroll_entry SET days_normal = ?, rate_normal = ?, days_special = ?, rate_special = ?, nssf = ?, tipau = ?, sdl = ?, paye = ?, auxilliary = ?, sugar_cane_related = ?, salary_fixed = ?, bonus = ?, overtime = ? WHERE (payroll_id = ? AND employee_id = ?)");
-    query.addBindValue(info.days_normal);
-    query.addBindValue(info.rate_normal);
-    query.addBindValue(info.days_special);
-    query.addBindValue(info.rate_special);
-    query.addBindValue(info.has_nssf ? 1 : 0);
-    query.addBindValue(info.has_tipau ? 1 : 0);
-    query.addBindValue(info.has_sdl ? 1 : 0);
-    query.addBindValue(info.has_paye ? 1 : 0);
-    query.addBindValue(info.auxilliary_amount);
-    query.addBindValue(info.sugar_cane_related);
-    query.addBindValue(info.salary_fixed);
-    query.addBindValue(info.bonus);
-    query.addBindValue(info.overtime);
-    query.addBindValue(payroll_id);
-    query.addBindValue(info.employee_id);
+    FilterMap map = payrollEntryInfoToVariantMap(info);
 
-    query.exec();
+    FilterMap filter_map;
+    filter_map["payroll_id"] = payroll_id;
+    filter_map["employee_id"] = info.employee_id;
+
+    updateDataInTable("payroll_entry", map, filter_map);
 }
 
 void DbManager::removePayrollByID(int payroll_id)
 {
-    QSqlQuery query(m_db);
-    query.prepare("DELETE FROM payroll_list WHERE (id = ?)");
-    query.addBindValue(payroll_id);
-    query.exec();
+    FilterMap map1,map2;
+    map1["id"] = payroll_id;
+    deleteDataInTable("payroll_list", map1);
 
-    query.prepare("DELETE FROM payroll_entry WHERE (payroll_id = ?)");
-    query.addBindValue(payroll_id);
-    query.exec();
+    map2["payroll_id"] = payroll_id;
+
+    deleteDataInTable("payroll_entry", map2);
 
     emit dataBaseChanged();
 }
 
 void DbManager::removePayrollEntry(int payroll_id, int employee_id)
 {
-    QSqlQuery query(m_db);
-    query.prepare("DELETE FROM payroll_entry WHERE (payroll_id = ? AND employee_id = ?)");
-    query.addBindValue(payroll_id);
-    query.addBindValue(employee_id);
-    query.exec();
+
+    FilterMap map;
+    map["payroll_id"] = payroll_id;
+    map["employee_id"] = employee_id;
+
+    deleteDataInTable("payroll_entry", map);
 
     emit dataBaseChanged();
 }
 
 void DbManager::removeByID(int id)
 {
-    QSqlQuery query(m_db);
-    query.exec("DELETE FROM employees WHERE (id = ?)");
-    query.addBindValue(id);
-    query.exec();
-
     emit dataBaseChanged();
 }
 
 void DbManager::updateByID(DbManager::EmployeeInfo info)
 {
-    QSqlQuery query(m_db);
-    query.prepare("UPDATE employees SET surname = ?, name = ?, nssf = ?, tipau = ?, sdl = ?, paye = ?, rate_normal = ?, salary_fixed = ?, department = ?, nssf_number = ?, is_active = ?, tin_number = ?, nida_number = ? WHERE id = ?");
-    query.addBindValue(info.surname);
-    query.addBindValue(info.name);
-    query.addBindValue(info.nssf ? 1 : 0);
-    query.addBindValue(info.tipau ? 1 : 0);
-    query.addBindValue(info.sdl ? 1 : 0);
-    query.addBindValue(info.paye ? 1 : 0);
-    query.addBindValue(info.rate_per_day);
-    query.addBindValue(info.salary_fixed);
-    query.addBindValue(info.department);
-    query.addBindValue(info.nssf_number);
-    query.addBindValue(info.is_active);
-    query.addBindValue(info.tin_number);
-    query.addBindValue(info.nida_number);
-
-    query.addBindValue(info.id);
-    query.exec();
-
+    FilterMap map;
+    map["id"] = info.id;
+    updateDataInTable("employees", employeeInfoToVariantMap(info), map);
     emit dataBaseChanged();
+}
 
+QMap<QString, QVariant> DbManager::companyInfoToVariantMap(DbManager::CompanyInfo info)
+{
+    FilterMap ret;
+    ret["id"] = info.id;
+    ret["name"] = info.name;
+    ret["postal_number"] = info.postal_number;
+    ret["postal_city"] = info.postal_city;
+    ret["location"] = info.location;
+    ret["phone_number"] = info.phone_number;
+    ret["email"] = info.email;
+    ret["tin_number"] = info.tin_number;
+    ret["nssf_nr"] = info.nssf_reg_nr;
+    ret["nssf_ctrl_nr"] = info.nssf_ctrl_nr;
+
+    return ret;
+
+}
+
+QMap<QString, QVariant> DbManager::employeeInfoToVariantMap(DbManager::EmployeeInfo info)
+{
+    FilterMap ret;
+    ret["id"] = info.id;
+    ret["surname"] = info.surname;
+    ret["name"] = info.name;
+    ret["nssf"] = info.nssf;
+    ret["tipau"] = info.tipau;
+    ret["sdl"] = info.sdl;
+    ret["paye"] = info.paye;
+    ret["rate_normal"] = info.rate_per_day;
+    ret["salary_fixed"] = info.salary_fixed;
+    ret["department"] = info.department;
+    ret["nssf_number"] = info.nssf_number;
+    ret["is_active"] = info.is_active;
+    ret["tin_number"] = info.tin_number;
+    ret["nida_number"] = info.nida_number;
+
+    return ret;
+
+}
+
+QMap<QString, QVariant> DbManager::payrollInfoToVariantMap(DbManager::PayrollInfo info)
+{
+    FilterMap ret;
+    ret["id"] = info.id;
+    ret["start_date"] = info.start_date;
+    ret["end_date"] = info.end_date;
+    ret["name"] = info.name;
+
+    return ret;
+}
+
+QMap<QString, QVariant> DbManager::payrollEntryInfoToVariantMap(DbManager::PayrollEntryInfo info)
+{
+    FilterMap ret;
+    ret["payroll_id"] = info.payroll_id;
+    ret["employee_id"] = info.employee_id;
+    ret["days_normal"] = info.days_normal;
+    ret["rate_normal"] = info.rate_normal;
+    ret["days_special"] = info.days_special;
+    ret["rate_special"] = info.rate_special;
+    ret["nssf"] = info.has_nssf;
+    ret["tipau"] = info.has_tipau;
+    ret["sdl"] = info.has_sdl;
+    ret["paye"] = info.has_paye;
+    ret["auxilliary"] = info.auxilliary_amount;
+    ret["sugar_cane_related"] = info.sugar_cane_related;
+    ret["salary_fixed"] = info.salary_fixed;
+    ret["bonus"] = info.bonus;
+    ret["overtime"] = info.overtime;
+    ret["department_name"] = info.department_name;
+
+    return ret;
+}
+
+QMap<QString, QVariant> DbManager::dailyRecordToVariantMap(DbManager::DailyRecord info)
+{
+    FilterMap ret;
+    ret["id"] = info.id;
+    ret["date"] = info.date;
+    ret["employee_id"] = info.employee_id;
+    ret["work_type"] = info.work_type_id;
+    ret["pay"] = info.pay;
+    ret["location"] = info.location;
+    ret["description"] = info.description;
+
+    return ret;
+}
+
+QMap<QString, QVariant> DbManager::workTypeToVariantMap(DbManager::WorkType info)
+{
+    FilterMap ret;
+    ret["id"] = info.id;
+    ret["default_pay"] = info.default_pay;
+    ret["description"] = info.description;
+    ret["is_active"] = info.is_active;
+
+    return ret;
+}
+
+DbManager::CompanyInfo DbManager::getCompanyInfoFromVariantList(QVariantList list)
+{
+    CompanyInfo info = {};
+
+    info.email = list.value(company_info_header.indexOf("email")).toString();
+    info.location = list.value(company_info_header.indexOf("location")).toString();
+    info.name = list.value(company_info_header.indexOf("name")).toString();
+    info.nssf_ctrl_nr = list.value(company_info_header.indexOf("nssf_ctrl_nr")).toString();
+    info.nssf_reg_nr = list.value(company_info_header.indexOf("nssf_nr")).toString();
+    info.phone_number = list.value(company_info_header.indexOf("phone_number")).toString();
+    info.postal_city = list.value(company_info_header.indexOf("postal_city")).toString();
+    info.postal_number = list.value(company_info_header.indexOf("postal_number")).toString();
+    info.tin_number = list.value(company_info_header.indexOf("tin_number")).toString();
+
+    return info;
+}
+
+DbManager::EmployeeInfo DbManager::getEmployeeInfoFromVariantList(QVariantList list)
+{
+    EmployeeInfo info = {};
+    info.id = list.value(employee_header.indexOf("id")).toInt();
+    info.surname = list.value(employee_header.indexOf("surname")).toString();
+    info.name = list.value(employee_header.indexOf("name")).toString();
+    info.nssf = list.value(employee_header.indexOf("nssf")).toBool();
+    info.tipau = list.value(employee_header.indexOf("tipau")).toBool();
+    info.sdl = list.value(employee_header.indexOf("sdl")).toBool();
+    info.paye = list.value(employee_header.indexOf("paye")).toBool();
+    info.rate_per_day = list.value(employee_header.indexOf("rate_per_day")).toInt();
+    info.salary_fixed = list.value(employee_header.indexOf("salary_fixed")).toInt();
+    info.department = list.value(employee_header.indexOf("department")).toInt();
+    info.nssf_number = list.value(employee_header.indexOf("nssf_number")).toString();
+    info.is_active = list.value(employee_header.indexOf("is_active")).toBool();
+    info.tin_number = list.value(employee_header.indexOf("tin_number")).toString();
+    info.nida_number = list.value(employee_header.indexOf("nida_number")).toString();
+
+    return info;
+}
+
+DbManager::PayrollInfo DbManager::getPayrollInfoFromVariantList(QVariantList list)
+{
+    PayrollInfo info = {};
+    info.id = list.value(payroll_info_header.indexOf("id")).toInt();
+    info.start_date = list.value(payroll_info_header.indexOf("start_date")).toDate();
+    info.end_date = list.value(payroll_info_header.indexOf("end_date")).toDate();
+    info.name = list.value(payroll_info_header.indexOf("name")).toString();
+    return info;
+}
+
+DbManager::PayrollEntryInfo DbManager::getPayrollEntryInfoFromVariantList(QVariantList list)
+{
+    PayrollEntryInfo info = {};
+    info.payroll_id = list.value(payroll_entry_header.indexOf("payroll_id")).toInt();
+    info.employee_id = list.value(payroll_entry_header.indexOf("employee_id")).toInt();
+    info.days_normal = list.value(payroll_entry_header.indexOf("days_normal")).toInt();
+    info.rate_normal = list.value(payroll_entry_header.indexOf("rate_normal")).toInt();
+    info.days_special = list.value(payroll_entry_header.indexOf("days_special")).toInt();
+    info.rate_special = list.value(payroll_entry_header.indexOf("rate_special")).toInt();
+    info.has_nssf = list.value(payroll_entry_header.indexOf("nssf")).toBool();
+    info.has_tipau = list.value(payroll_entry_header.indexOf("tipau")).toBool();
+    info.has_sdl = list.value(payroll_entry_header.indexOf("sdl")).toBool();
+    info.has_paye = list.value(payroll_entry_header.indexOf("paye")).toBool();
+    info.auxilliary_amount = list.value(payroll_entry_header.indexOf("auxilliary")).toInt();
+    info.sugar_cane_related = list.value(payroll_entry_header.indexOf("sugar_cane_related")).toInt();
+    info.salary_fixed = list.value(payroll_entry_header.indexOf("salary_fixed")).toInt();
+    info.bonus = list.value(payroll_entry_header.indexOf("bonus")).toInt();
+    info.overtime = list.value(payroll_entry_header.indexOf("overtime")).toInt();
+    info.department_name = list.value(payroll_entry_header.indexOf("department_name")).toInt();
+
+    return info;
+}
+
+DbManager::DailyRecord DbManager::getDailyRecordFromVariantList(QVariantList list)
+{
+    DailyRecord info = {};
+    info.id = list.value(daily_record_header.indexOf("id")).toInt();
+    info.date = list.value(daily_record_header.indexOf("date")).toDate();
+    info.employee_id = list.value(daily_record_header.indexOf("employee_id")).toInt();
+    info.work_type_id = list.value(daily_record_header.indexOf("work_type")).toInt();
+    info.pay = list.value(daily_record_header.indexOf("pay")).toInt();
+    info.location = list.value(daily_record_header.indexOf("location")).toInt();
+    info.description = list.value(daily_record_header.indexOf("description")).toString();
+
+    return info;
+}
+
+DbManager::WorkType DbManager::getWorkTypeFromVariantList(QVariantList list)
+{
+    WorkType info = {};
+    info.id = list.value(work_type_header.indexOf("id")).toInt();
+    info.default_pay = list.value(work_type_header.indexOf("default_pay")).toInt();
+    info.description = list.value(work_type_header.indexOf("description")).toString();
+    info.is_active = list.value(work_type_header.indexOf("is_active")).toBool();
+
+    return info;
 }
 
 QList<DbManager::EmployeeInfo> DbManager::getAllEmployees()
 {
     QList<EmployeeInfo> ret;
+    QList<QVariantList> data = getDataFromTable("employees", employee_header, QMap<QString, QVariant>());
 
-    QSqlQuery query(m_db);
-    query.exec("SELECT id, surname, name, nssf, tipau, sdl, paye, rate_normal, salary_fixed, department, nssf_number, is_active, tin_number, nida_number FROM employees");
-
-    while (query.next()) {
-            int id = query.value(0).toInt();
-            QString surname = query.value(1).toString();
-            QString name = query.value(2).toString();
-            bool nssf = query.value(3) > 0;
-            bool tipau = query.value(4) > 0;
-            bool sdl = query.value(5) > 0;
-            bool paye = query.value(6) > 0;
-            int rate_normal = query.value(7).toInt();
-            int salary_fixed = query.value(8).toInt();
-            int department = query.value(9).toInt();
-            QString nssf_number = query.value(10).toString();
-            bool is_active = query.value(11) > 0;
-            QString tin_number = query.value(12).toString();
-            QString nida_number = query.value(13).toString();
-
-            EmployeeInfo tmp = {};
-            tmp.id = id;
-            tmp.name = name;
-            tmp.surname = surname;
-            tmp.nssf = nssf;
-            tmp.tipau = tipau;
-            tmp.sdl = sdl;
-            tmp.paye = paye;
-            tmp.salary_fixed = salary_fixed;
-            tmp.department = department;
-            tmp.rate_per_day = rate_normal;
-            tmp.nssf_number = nssf_number;
-            tmp.is_active = is_active;
-            tmp.tin_number = tin_number;
-            tmp.nida_number = nida_number;
-
-            ret.append(tmp);
+    for (auto list : data) {
+        EmployeeInfo info = getEmployeeInfoFromVariantList(list);
+        ret.append(info);
     }
 
     return ret;
@@ -477,24 +825,11 @@ QList<DbManager::EmployeeInfo> DbManager::getAllEmployees()
 
 QList<DbManager::WorkType> DbManager::getAllWorkItems()
 {
-    QList<WorkType> ret;
+    QList<QVariantList> data = getDataFromTable("work_type", work_type_header, QMap<QString, QVariant>());
+    QList<DbManager::WorkType> ret;
 
-    QSqlQuery query(m_db);
-    query.exec("SELECT id, description, default_pay, is_active FROM work_type");
-
-    while (query.next()) {
-            int id = query.value(0).toInt();
-            QString description = query.value(1).toString();
-            int default_pay = query.value(2).toInt();
-            bool is_active = query.value(3) > 0;
-
-            WorkType tmp = {};
-            tmp.id = id;
-            tmp.description = description;
-            tmp.default_pay = default_pay;
-            tmp.is_active = is_active;
-
-            ret.append(tmp);
+    for (auto &item : data) {
+        ret.append(getWorkTypeFromVariantList(item));
     }
 
     return ret;
@@ -503,29 +838,10 @@ QList<DbManager::WorkType> DbManager::getAllWorkItems()
 QList<DbManager::DailyRecord> DbManager::getAllDailyRecords()
 {
     QList<DailyRecord> ret;
+    QList<QVariantList> data = getDataFromTable("daily_record", daily_record_header, QMap<QString, QVariant>());
 
-    QSqlQuery query(m_db);
-    query.exec("SELECT id, date, employee_id, work_type, pay, location, description FROM daily_record");
-
-    while (query.next()) {
-            int id = query.value(0).toInt();
-            QDate date = query.value(1).toDate();
-            int employee_id = query.value(2).toInt();
-            int work_type = query.value(3).toInt();
-            int pay = query.value(4).toInt();
-            int location = query.value(5).toInt();
-            QString description = query.value(6).toString();
-
-            DailyRecord tmp = {};
-            tmp.id = id;
-            tmp.employee_id = employee_id;
-            tmp.date = date;
-            tmp.work_type_id = work_type;
-            tmp.pay = pay;
-            tmp.location = location;
-            tmp.description = description;
-
-            ret.append(tmp);
+    for (auto &item : data) {
+        ret.append(getDailyRecordFromVariantList(item));
     }
 
     return ret;
@@ -533,175 +849,91 @@ QList<DbManager::DailyRecord> DbManager::getAllDailyRecords()
 
 DbManager::EmployeeInfo DbManager::getEmployeeFromName(QString surname, QString name)
 {
-    DbManager::EmployeeInfo ret = {};
+    QMap<QString, QVariant> map;
+    map["name"] = name;
+    map["surname"] = surname;
 
-    // mark as invalid
-    ret.id = -1;
-
-    QSqlQuery query(m_db);
-    query.prepare("SELECT id, surname, name, nssf, tipau, sdl, paye, rate_normal, salary_fixed, department, nssf_number, is_active, tin_number, nida_number FROM employees WHERE surname = (:surname) AND name = (:name) ");
-    query.bindValue(":surname", surname);
-    query.bindValue(":name", name);
-
-    query.exec();
-    if (query.next()) {
-        ret.id = query.value(0).toInt();
-        ret.surname = query.value(1).toString();
-        ret.name = query.value(2).toString();
-        ret.nssf = query.value(3) > 0;
-        ret.tipau = query.value(4) > 0;
-        ret.sdl = query.value(5) > 0;
-        ret.paye = query.value(6) > 0;
-        ret.rate_per_day = query.value(7).toInt();
-        ret.salary_fixed = query.value(8).toInt();
-        ret.department = query.value(9).toInt();
-        ret.nssf_number = query.value(10).toString();
-        ret.is_active = query.value(11) > 0;
-        ret.tin_number = query.value(12).toString();
-        ret.nida_number = query.value(13).toString();
+    return getEmployeeInfoFromVariantList(getDataFromTable("employees", employee_header, map).first());
 }
 
-    return ret;
-}
-
-DbManager::EmployeeInfo DbManager::getEmployeeInfo(int id)
+DbManager::EmployeeInfo DbManager::getEmployeeByID(int id)
 {
-    EmployeeInfo ret = {};
+    QMap<QString, QVariant> map;
+    map["id"] = id;
+    QList<QVariantList> data = getDataFromTable("employees", employee_header, map);
 
+    return getEmployeeInfoFromVariantList(data.first());
+}
 
-
-    QSqlQuery query(m_db);
-    query.prepare("SELECT id, surname, name, nssf, tipau, sdl, paye, rate_normal, salary_fixed, department, nssf_number, is_active, tin_number, nida_number FROM employees WHERE id = (:id)");
-    query.bindValue(":id", id);
-    query.exec();
-    query.first();
-    ret.id = id;
-    ret.surname = query.value(1).toString();
-    ret.name = query.value(2).toString();
-    ret.nssf = query.value(3) > 0;
-    ret.tipau = query.value(4) > 0;
-    ret.sdl = query.value(5) > 0;
-    ret.paye = query.value(6) > 0;
-    ret.rate_per_day = query.value(7).toInt();
-    ret.salary_fixed = query.value(8).toInt();
-    ret.department = query.value(9).toInt();
-    ret.nssf_number = query.value(10).toString();
-    ret.is_active = query.value(11).toBool();
-    ret.tin_number = query.value(12).toString();
-    ret.nida_number = query.value(13).toString();
-
-    return ret;
+DbManager::EmployeeInfo DbManager::getEmployeeInfo(int id, bool& success, QString table)
+{
+    success = true;
+    return getEmployeeByID(id);
 }
 
 DbManager::WorkType DbManager::getWorkType(int id)
 {
-    WorkType ret = {};
-    QSqlQuery query(m_db);
-    query.prepare("SELECT id, description, default_pay, is_active FROM work_type WHERE id = (:id)");
-    query.bindValue(":id", id);
-    query.exec();
-    query.first();
-    ret.id = id;
-    ret.description = query.value(1).toString();
-    ret.default_pay = query.value(2).toInt();
-    ret.is_active = query.value(3).toBool();
-
-    return ret;
+    FilterMap map;
+    map["id"] = id;
+    return getWorkTypeFromVariantList(getDataFromTable("work_type", work_type_header, map).first());
 }
 
 DbManager::DailyRecord DbManager::getDailyRecord(int id)
 {
-    DailyRecord ret = {};
-    QSqlQuery query(m_db);
-    query.prepare("SELECT id, date, employee_id, work_type, pay, location, description FROM daily_record WHERE id = (:id)");
-    query.bindValue(":id", id);
-    query.exec();
-    query.first();
-    ret.id = id;
-    ret.date = query.value(1).toDate();
-    ret.employee_id = query.value(2).toInt();
-    ret.work_type_id = query.value(3).toInt();
-    ret.pay = query.value(4).toInt();
-    ret.location = query.value(5).toInt();
-    ret.description = query.value(6).toString();
+    FilterMap map;
+    map["id"] = id;
 
-    return ret;
+    return getDailyRecordFromVariantList(getDataFromTable("daily_record", daily_record_header, map).first());
 }
 
 QList<DbManager::DailyRecord> DbManager::getDailyRecordForDateAndEmployeeID(QDate date, int employee_id)
 {
-    DailyRecord ret = {};
-    QSqlQuery query(m_db);
-    query.prepare("SELECT id, date, employee_id, work_type, pay, location, description FROM daily_record WHERE employee_id = (:id) AND date = (:date)");
-    query.bindValue(":id", employee_id);
-    query.bindValue(":date", date);
-    query.exec();
+    FilterMap map;
+    map["date"] = date;
+    map["employee_id"] = employee_id;
 
-    QList<DailyRecord> ret_list = {};
-    while (query.next()) {
+    QList<QVariantList> data = getDataFromTable("daily_record", daily_record_header, map);
 
-        DailyRecord ret = {};
-        ret.id = query.value(0).toInt();
-        ret.date = date;
-        ret.employee_id = employee_id;
-        ret.work_type_id = query.value(3).toInt();
-        ret.pay = query.value(4).toInt();
-        ret.location = query.value(5).toInt();
-        ret.description = query.value(6).toString();
-        ret_list.append(ret);
+    QList<DailyRecord> ret;
+
+    for (auto &item : data) {
+        ret.append(getDailyRecordFromVariantList(item));
     }
 
-    return ret_list;
+    return ret;
 }
 
 QList<DbManager::DailyRecord> DbManager::getDailyRecordForDateAndWorkType(QDate date, int work_id)
 {
-    DailyRecord ret = {};
-    QSqlQuery query(m_db);
-    query.prepare("SELECT id, date, employee_id, work_type, pay, location, description FROM daily_record WHERE work_type = (:work_type) AND date = (:date)");
-    query.bindValue(":work_type", work_id);
-    query.bindValue(":date", date);
-    query.exec();
+    QList<DbManager::DailyRecord> ret;
 
-    QList<DailyRecord> ret_list = {};
-    while (query.next()) {
+    FilterMap map;
+    map["work_type"] = work_id;
+    map["date"] = date;
 
-        DailyRecord ret = {};
-        ret.id = query.value(0).toInt();
-        ret.date = date;
-        ret.employee_id = query.value(2).toInt();
-        ret.work_type_id = query.value(3).toInt();
-        ret.pay = query.value(4).toInt();
-        ret.location = query.value(5).toInt();
-        ret.description = query.value(6).toString();
-        ret_list.append(ret);
+    QList<QVariantList> data = getDataFromTable("daily_record", daily_record_header, map);
+
+    for (auto &item : data) {
+        ret.append(getDailyRecordFromVariantList(item));
     }
 
-    return ret_list;
+    return ret;
 }
 
 QList<DbManager::DailyRecord> DbManager::getDailyRecordForDate(QDate date)
 {
-    DailyRecord ret = {};
-    QSqlQuery query(m_db);
-    query.prepare("SELECT id, date, employee_id, work_type, pay, location, description FROM daily_record WHERE date = (:date)");
-    query.bindValue(":date", date);
-    query.exec();
+    QList<DbManager::DailyRecord> ret;
 
-    QList<DailyRecord> ret_list = {};
-    while (query.next()) {
-        DailyRecord ret = {};
-        ret.id = query.value(0).toInt();
-        ret.date = date;
-        ret.employee_id = query.value(2).toInt();
-        ret.work_type_id = query.value(3).toInt();
-        ret.pay = query.value(4).toInt();
-        ret.location = query.value(5).toInt();
-        ret.description = query.value(6).toString();
-        ret_list.append(ret);
+    FilterMap map;
+    map["date"] = date;
+
+    QList<QVariantList> data = getDataFromTable("daily_record", daily_record_header, map);
+
+    for (auto &item : data) {
+        ret.append(getDailyRecordFromVariantList(item));
     }
 
-    return ret_list;
+    return ret;
 }
 
 QList<DbManager::WorkType> DbManager::getWorkTypeListForDate(QDate date)
@@ -720,8 +952,6 @@ QList<DbManager::WorkType> DbManager::getWorkTypeListForDate(QDate date)
     return work_list_ret;
 }
 
-
-
 QList<DbManager::EmployeeInfo> DbManager::getMatchName(QString name)
 {
     QList<EmployeeInfo> ret;
@@ -736,25 +966,17 @@ QList<DbManager::EmployeeInfo> DbManager::getMatchName(QString name)
     }
 
     return ret;
-
 }
 
 QList<DbManager::PayrollInfo> DbManager::getAllPayrolls()
 {
+
     QList<PayrollInfo> ret;
 
-    QSqlQuery query(m_db);
-    query.exec("SELECT id, start_date, end_date, name FROM payroll_list");
+    QList<QVariantList> data = getDataFromTable("payroll_list", payroll_info_header, QMap<QString, QVariant>());
 
-    while (query.next()) {
-            int id = query.value(0).toInt();
-            QDate start_date = query.value(1).toDate();
-            QDate end_date = query.value(2).toDate();
-            QString name = query.value(3).toString();
-
-            PayrollInfo tmp = {id, start_date, end_date, name};
-
-            ret.append(tmp);
+    for (auto &item : data) {
+        ret.append(getPayrollInfoFromVariantList(item));
     }
 
     return ret;
@@ -762,46 +984,22 @@ QList<DbManager::PayrollInfo> DbManager::getAllPayrolls()
 
 DbManager::PayrollInfo DbManager::getPayrollInfoByID(int id)
 {
-    PayrollInfo ret = {};
-
-    QSqlQuery query(m_db);
-    query.prepare("SELECT id, start_date, end_date, name FROM payroll_list WHERE id = (:id)");
-    query.bindValue(":id", id);
-    query.exec();
-    query.first();
-    ret.id = query.value(0).toInt();
-    ret.start_date = query.value(1).toDate();
-    ret.end_date = query.value(2).toDate();
-    ret.name = query.value(3).toString();
-
-    return ret;
+    FilterMap map;
+    map["id"] = id;
+    return getPayrollInfoFromVariantList(getDataFromTable("payroll_list", payroll_info_header, map).first());
 }
 
 QList<DbManager::PayrollEntryInfo> DbManager::getPayrollEntryInfo(int payroll_id)
 {
-    QList<PayrollEntryInfo> ret = {} ;
-    QSqlQuery query(m_db);
-    query.prepare("SELECT employee_id, days_normal, rate_normal, days_special, rate_special, nssf, tipau, sdl, paye, auxilliary, sugar_cane_related, salary_fixed, bonus, overtime FROM payroll_entry WHERE payroll_id = (:id)");
-    query.bindValue(":id", payroll_id);
-    query.exec();
+    FilterMap map;
+    map["payroll_id"] = payroll_id;
 
-    while (query.next()) {
-        PayrollEntryInfo tmp = {};
-        tmp.employee_id = query.value(0).toInt();
-        tmp.days_normal = query.value(1).toInt();
-        tmp.rate_normal = query.value(2).toInt();
-        tmp.days_special = query.value(3).toInt();
-        tmp.rate_special = query.value(4).toInt();
-        tmp.has_nssf = query.value(5).toInt();
-        tmp.has_tipau = query.value(6).toInt();
-        tmp.has_sdl = query.value(7).toInt();
-        tmp.has_paye = query.value(8).toInt();
-        tmp.auxilliary_amount = query.value(9).toInt();
-        tmp.sugar_cane_related = query.value(10).toInt();
-        tmp.salary_fixed = query.value(11).toInt();
-        tmp.bonus = query.value(12).toInt();
-        tmp.overtime = query.value(13).toInt();
-        ret.append(tmp);
+    QList<QVariantList> data = getDataFromTable("payroll_entry", payroll_entry_header, map);
+
+    QList<PayrollEntryInfo> ret;
+
+    for (auto &item : data) {
+        ret.append(getPayrollEntryInfoFromVariantList(item));
     }
 
     return ret;
@@ -809,20 +1007,8 @@ QList<DbManager::PayrollEntryInfo> DbManager::getPayrollEntryInfo(int payroll_id
 
 DbManager::WorkType DbManager::getWorkTypeFromName(QString name)
 {
-    WorkType ret = {};
-    ret.id = -1;
-    QSqlQuery query(m_db);
-    query.prepare("SELECT id, default_pay, is_active FROM work_type WHERE description = (:desc)");
-    query.bindValue(":desc", name);
+    FilterMap map;
+    map["description"] = name;
 
-    query.exec();
-
-    if (query.next()) {
-        ret.description = name;
-        ret.id = query.value(0).toInt();
-        ret.default_pay = query.value(1).toInt();
-        ret.is_active = query.value(2).toBool();
-    }
-
-    return ret;
+    return getWorkTypeFromVariantList(getDataFromTable("work_type", work_type_header, map).first());
 }

@@ -9,6 +9,14 @@
 #include <QObject>
 #include <QDate>
 
+struct SQLiteColumnInfo {
+    QString name;
+    QString data_type;
+    QString default_val;
+};
+
+typedef QMap<QString, QVariant> KeyValueMap;
+
 
 class DbManager: public QObject
 {
@@ -17,6 +25,8 @@ public:
     DbManager();
 
     ~DbManager();
+
+    typedef QMap<QString, QVariant> FilterMap;
 
     struct EmployeeInfo {
         int id;
@@ -43,6 +53,7 @@ public:
     };
 
     struct PayrollEntryInfo {
+        int payroll_id;
         int employee_id;
         bool has_nssf;
         bool has_tipau;
@@ -57,9 +68,11 @@ public:
         int salary_fixed;
         int bonus;
         int overtime;
+        QString department_name;
     };
 
     struct CompanyInfo {
+        int id;
         QString name;
         QString postal_number;
         QString postal_city;
@@ -96,13 +109,21 @@ public:
         }
     };
 
+    struct WorkCategory {
+        QString hash;
+    };
+
     void setupDatabase(QString path, QString name="main");
 
     void closeDataBase();
 
+    QStringList getTableItems(QString table);
+
+    void addColumnToTable(QString table, QString column, QString data_type);
+
     void triggerDataBaseChanged() { emit dataBaseChanged(); }
 
-    void addEmployee(EmployeeInfo info);
+    void addEmployee(EmployeeInfo info, QString table_name="employees");
 
     void setCompanyInfo(CompanyInfo info);
 
@@ -132,7 +153,7 @@ public:
 
     QList<DbManager::DailyRecord> getAllDailyRecords();
 
-    EmployeeInfo getEmployeeInfo(int id);
+    EmployeeInfo getEmployeeInfo(int id, bool&success, QString table="employees");
 
     WorkType getWorkType(int id);
 
@@ -163,12 +184,52 @@ public:
     void removeDailyRecord(int id);
 
     void updateDailyRecord(DbManager::DailyRecord record);
+
+    DbManager::EmployeeInfo getEmployeeByID(int id);
+
+    QList<QVariantList> getDataFromTable(QString table_name, QList<SQLiteColumnInfo> items, QMap<QString, QVariant> map, QString sort_name="");
+
+    QList<QVariantList> getDataFromTable(QString table_name, QStringList items, QMap<QString, QVariant> map);
+
+    bool updateDataInTable(QString table_name, FilterMap data, FilterMap map );
+
+    int addDataToTable(QString table_name, FilterMap data);
+
+    bool deleteDataInTable(QString table_name, QMap<QString, QVariant> filter);
+
 signals:
 
     void dataBaseChanged();
 
 private:
     QSqlDatabase m_db;
+
+    QStringList company_info_header = {"id", "name", "postal_number", "postal_city", "location", "phone_number", "email", "tin_number", "nssf_nr", "nssf_ctrl_nr"};
+    QStringList employee_header{"id", "surname", "name", "nssf", "tipau", "sdl", "paye", "rate_normal", "salary_fixed", "department", "nssf_number", "is_active", "tin_number", "nida_number"};
+    QStringList payroll_info_header = {"id", "start_date", "end_date", "name"};
+    QStringList payroll_entry_header = {"payroll_id", "employee_id", "days_normal", "rate_normal", "days_special", "rate_special", "nssf", "tipau", "sdl", "paye", "auxilliary", "sugar_cane_related", "salary_fixed", "bonus", "overtime", "department_name"};
+    QStringList daily_record_header = {"id", "date", "employee_id", "work_type", "pay", "location", "description"};
+    QStringList work_type_header = {"id", "default_pay", "description", "is_active"};
+
+    QStringList department_header = {"id", "description", "has_sdl"};
+    QStringList department_types = {"INTEGER", "TEXT", "INTEGER"};
+
+    CompanyInfo getCompanyInfoFromVariantList(QVariantList list);
+    EmployeeInfo getEmployeeInfoFromVariantList(QVariantList list);
+    PayrollInfo getPayrollInfoFromVariantList(QVariantList list);
+    PayrollEntryInfo getPayrollEntryInfoFromVariantList(QVariantList list);
+    DailyRecord getDailyRecordFromVariantList(QVariantList list);
+    WorkType getWorkTypeFromVariantList(QVariantList list);
+
+    QMap<QString, QVariant> companyInfoToVariantMap(DbManager::CompanyInfo info);
+    QMap<QString, QVariant> employeeInfoToVariantMap(DbManager::EmployeeInfo info);
+    QMap<QString, QVariant> payrollInfoToVariantMap(DbManager::PayrollInfo info);
+    QMap<QString, QVariant> payrollEntryInfoToVariantMap(DbManager::PayrollEntryInfo info);
+    QMap<QString, QVariant> dailyRecordToVariantMap(DbManager::DailyRecord info);
+    QMap<QString, QVariant> workTypeToVariantMap(DbManager::WorkType info);
+
+    void createTable(QString table_name, QStringList header, QStringList data_types);
+
 };
 
 #endif // DBMANAGER_H
