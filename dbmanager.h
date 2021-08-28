@@ -187,7 +187,7 @@ public:
 
     DbManager::EmployeeInfo getEmployeeByID(int id);
 
-    QList<QVariantList> getDataFromTable(QString table_name, QList<SQLiteColumnInfo> items, QMap<QString, QVariant> map, QString sort_name="");
+    QList<QVariantList> getDataFromTable(QString table_name, QList<SQLiteColumnInfo> items, QMap<QString, QVariant> map, QString sort_name="", QString sqlite_filter="");
 
     QList<QVariantList> getDataFromTable(QString table_name, QStringList items, QMap<QString, QVariant> map);
 

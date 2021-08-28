@@ -223,11 +223,12 @@ void DbManager::createTable(QString table_name, QStringList header, QStringList 
 
     query_string = query_string.arg(table_name).arg(item_data_string);
 
+
      QSqlQuery query(m_db);
      query.exec(query_string);
 }
 
-QList<QVariantList> DbManager::getDataFromTable(QString table_name, QList<SQLiteColumnInfo> items, QMap<QString, QVariant> map, QString sort_name)
+QList<QVariantList> DbManager::getDataFromTable(QString table_name, QList<SQLiteColumnInfo> items, QMap<QString, QVariant> map, QString sort_name, QString sqlite_filter)
 {
 
     QString query_string = "SELECT %1 FROM %2 %3 %4";
@@ -241,8 +242,8 @@ QList<QVariantList> DbManager::getDataFromTable(QString table_name, QList<SQLite
     item_data_string = item_data_string.remove(item_data_string.size()-1, 1);
 
 
-    QString where_string;
-    if (map.size() > 0) {
+    QString where_string = sqlite_filter;
+    if (map.size() > 0 && where_string.isEmpty()) {
         where_string = "WHERE (";
 
         for (auto item : map.keys()) {
@@ -262,15 +263,17 @@ QList<QVariantList> DbManager::getDataFromTable(QString table_name, QList<SQLite
     }
 
     query_string = query_string.arg(item_data_string).arg(table_name).arg(where_string).arg(sorting);
-
+    //qInfo() << query_string;
     QSqlQuery query(m_db);
 
     query.prepare(query_string);
 
-    qInfo() << query_string;
+   // qInfo() << query_string;
 
-    for (auto item : map.keys()) {
-        query.addBindValue(map[item]);
+    if (sqlite_filter.isEmpty()) {
+        for (auto &item : map.keys()) {
+            query.addBindValue(map[item]);
+        }
     }
 
     query.exec();
