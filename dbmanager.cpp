@@ -77,18 +77,18 @@ QStringList DbManager::getAllTableNames()
     return ret;
 }
 
-void DbManager::createTable(QString table_name, QStringList header, QStringList data_types)
+void DbManager::createTable(QString table_name, QList<SQLiteColumnInfo> column_info)
 {
     QString query_string = "CREATE TABLE %1 %2";
 
     QString item_data_string = "(";
     int counter = 0;
-    for (auto item : header){
+    for (auto item : column_info){
 
         if (counter == 0) {
-            item_data_string = item_data_string.append(item + " " + data_types[header.indexOf(item)] + " PRIMARY KEY,");
+            item_data_string = item_data_string.append(item.name + " " + item.data_type + " PRIMARY KEY,");
         } else {
-            item_data_string = item_data_string.append(item + " " + data_types[header.indexOf(item)] + ",");
+            item_data_string = item_data_string.append(item.name + " " + item.data_type + " DEFAULT " + item.default_val + ",");
         }
 
        counter++;
@@ -340,7 +340,7 @@ int DbManager::addDataToTable(QString table_name, FilterMap data)
 
     query_string = query_string.arg(table_name).arg(item_data_string).arg(values_string);
 
-    qInfo() << query_string;
+    //qInfo() << query_string;
 
     QSqlQuery query(m_db);
 

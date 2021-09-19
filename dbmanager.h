@@ -35,7 +35,7 @@ public:
 
     QStringList getAllTableNames();
 
-    void createTable(QString table_name, QStringList header, QStringList data_types);
+    void createTable(QString table_name, QList<SQLiteColumnInfo> column_info);
 
     void addColumnToTable(QString table, QString column, QString data_type);
 
