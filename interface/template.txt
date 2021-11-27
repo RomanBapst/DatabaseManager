@@ -1,0 +1,188 @@
+
+#include "@(class_header_name)"
+
+@(class_name)::@(class_name)(@(database_manager_name)& dbManager) :
+    _dbManager(dbManager)
+{
+
+@[for column in column_info]@
+    _column_info.append(SQLiteColumnInfo{.name = "@(column["name"])",
+                                         .data_type = "@(column["data_type"])",
+                                         .default_val = "@(column["default"])"});
+@[end for]
+
+    // create the table if it does not exist yet
+    _dbManager.createTable("@(db_table)", _column_info);
+
+    QStringList columns = _dbManager.getTableItems("@(table_name)");
+
+    for (auto &item : _column_info) {
+        if (!columns.contains(item.name)) {
+            _dbManager.addColumnToTable("@(db_table)", item.name, item.data_type);
+        }
+    }
+
+}
+
+QMap<QString, QVariant> @(class_name)::@(table_name)InfoToVariantMap(@(struct_name) info)
+{
+    QMap<QString, QVariant> ret;
+    @[for column in column_info]@
+    ret["@(column["name"])"] = info.@(column["name"]);
+    @[end for]
+
+    return ret;
+
+}
+
+@(struct_name) @(class_name)::@(table_name)InfoFromVariantList(QVariantList list)
+{
+    @(struct_name) info = {};
+
+    @[for index in range(len(column_info))]@
+    info.@(column_info[index]["name"]) = list.value(@(index)).@(column_info[index]["conversion"])();
+    @[end for]
+    return info;
+}
+
+QList<@(struct_name)> @(class_name)::get@(struct_name)(QMap<QString, QVariant> key_value, QString sort_name, QString sqlite_filter)
+{
+    QList<QVariantList> data = _dbManager.getDataFromTable("@(db_table)", _column_info, key_value, sort_name, sqlite_filter);
+
+    QList<@(struct_name)> ret = {};
+
+    for (auto &item : data) {
+        ret.append(@(table_name)InfoFromVariantList(item));
+    }
+
+    return ret;
+}
+
+int @(class_name)::add@(struct_name)(@(struct_name) info)
+{
+    QMap<QString, QVariant> map = @(table_name)InfoToVariantMap(info);
+    map.remove("id");
+
+    int ret = _dbManager.addDataToTable("@(db_table)", map);
+
+    emit @(table_name)Changed();
+
+    return ret;
+}
+
+@(struct_name) @(class_name)::get@(struct_name)ByID(int id)
+{
+    QMap<QString, QVariant> map;
+    map["id"] = id;
+
+    QList<QVariantList> info = _dbManager.getDataFromTable("@(db_table)", _column_info, map);
+
+    if (info.length() > 0) {
+        return @(table_name)InfoFromVariantList(info.first());
+    } else {
+        return @(struct_name) {};
+    }
+}
+
+QList<@(struct_name)> @(class_name)::get@(struct_name)By(QString name, QVariant value, QString sort_name, QString sqlite_filter)
+{
+    QMap<QString, QVariant> map;
+    map[name] = value;
+
+    QList<QVariantList> info = _dbManager.getDataFromTable("@(db_table)",_column_info, map, sort_name, sqlite_filter);
+
+    QList<@(struct_name)> ret;
+
+    for (auto &item :info) {
+        ret.append(@(table_name)InfoFromVariantList(item));
+    }
+
+    return ret;
+
+}
+
+@[for column in column_info]@
+QList<@(column["qt_type"])> @(class_name)::get@(column["name"].capitalize())(QMap<QString, QVariant> key_value, QString sort_name)
+{
+    QList<@(column["qt_type"])> ret = {};
+
+    int index = getColumnIndex("@(column["name"])");
+
+    if (index < 0) {
+        return ret;
+    }
+
+    SQLiteColumnInfo col_info = _column_info[index];
+
+    QList<SQLiteColumnInfo> list;
+    list.append(col_info);
+
+    QList<QVariantList> info = _dbManager.getDataFromTable("@(db_table)", list, key_value, sort_name);
+
+    for (auto &item : info) {
+        ret.append(item.first().@(column["conversion"])());
+    }
+
+    return ret;
+}
+@[end for]
+
+int @(class_name)::getColumnIndex(QString column)
+{
+    int index = 0;
+
+    for (auto &item : _column_info) {
+        if (item.name == column) {
+            return index;
+        }
+        index++;
+    }
+
+    return -1;
+}
+
+bool @(class_name)::updateByID(@(struct_name) info, int id)
+{
+    _dbManager.updateDataInTable("@(db_table)", @(table_name)InfoToVariantMap(info), KeyValueMap({{"id", id}}));
+    return true;
+}
+
+bool @(class_name)::removeByID(int id)
+{
+    _dbManager.deleteDataInTable("@(db_table)", KeyValueMap({{"id", id}}));
+
+    return true;
+}
+
+bool @(class_name)::updateBy(@(struct_name) info, KeyValueMap map)
+{
+    _dbManager.updateDataInTable("@(db_table)", @(table_name)InfoToVariantMap(info), map);
+    return true;
+}
+
+bool @(class_name)::removeBy(QString name, QVariant val)
+{
+    _dbManager.deleteDataInTable("@(db_table)", KeyValueMap({{name, val}}));
+    return true;
+}
+
+bool @(class_name)::removeBy(KeyValueMap map)
+{
+    _dbManager.deleteDataInTable("@(db_table)", map);
+    return true;
+}
+
+@[for column in column_info]@
+bool @(class_name)::update@(column["name"].capitalize())ByID(int id, QVariant val)
+{
+    _dbManager.updateDataInTable("@(db_table)", KeyValueMap({{"@(column["name"])", val}}), KeyValueMap({{"id", id}}));
+    return true;
+}
+@[end for]
+
+bool @(class_name)::updateColumnByID(int col, int id, QVariant val)
+{
+    QString col_name = getNameFromIndex(col);
+    _dbManager.updateDataInTable("@(db_table)", KeyValueMap({{col_name, val}}), KeyValueMap({{"id", id}}));
+    return true;
+}

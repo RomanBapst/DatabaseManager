@@ -1,0 +1,114 @@
+#ifndef @(class_name.upper() + "_H")
+#define @(class_name.upper() + "_H")
+
+
+#include <QObject>
+#include <QWidget>
+#include <QMap>
+#include <QVariant>
+#include <Lib/DatabaseManager/dbmanager.h>
+
+
+struct @(struct_name) {
+@[for column in column_info]@
+    @(column["qt_type"]) @(column["name"]);
+@[end for]
+
+friend bool operator==(const @(struct_name)& lhs, const @(struct_name)& rhs) {
+    return rhs.id == lhs.id;
+}
+
+QVariant getByIndex(int index) const {
+    if (index == 0) {
+        return id;
+@[for column in column_info]
+    @[if column_info.index(column) == 0]
+        @[continue]
+    @[end if]
+    } else if (index == @(column_info.index(column))) {
+        return @(column["name"]);
+@[end for]
+    } else { return QVariant();
+}
+}
+};
+
+class @(class_name) : public QObject
+{
+    Q_OBJECT
+public:
+    @(class_name)(@(database_manager_name)& dbManager);
+
+    static constexpr int _num_cols = @(len(column_info));
+
+    static QString getNameFromIndex(int index) {
+    if (index == 0) {
+        return "id";
+    @[for column in column_info]@
+    @[if column_info.index(column) == 0]
+        @[continue]
+    @[end if]
+        } else if (index == @(column_info.index(column))) {
+            return "@(column["name"])";
+    @[end for]
+    }
+    }
+
+    static int getIndexFromName(QString name) {
+    if (name == "id") {
+        return 0;
+    @[for column in column_info]@
+    @[if column_info.index(column) == 0]
+        @[continue]
+    @[end if]
+        } else if (name == "@(column["name"])") {
+            return @(column_info.index(column));
+    @[end for]
+    }
+    }
+
+    QList<@(struct_name)> get@(struct_name)(QMap<QString, QVariant> key_value, QString sort_name = "", QString sqlite_filter="");
+
+    int add@(struct_name)(@(struct_name) info);
+
+    @(struct_name) get@(struct_name)ByID(int id);
+
+    QList<@(struct_name)> get@(struct_name)By(QString name, QVariant value, QString sort_name = "", QString sqlite_filter="");
+
+    bool updateByID(@(struct_name) info, int id);
+
+    bool removeByID(int id);
+
+    @[for column in column_info]@
+    bool update@(column["name"].capitalize())ByID(int id, QVariant);
+    @[end for]
+
+    bool updateColumnByID(int col, int id, QVariant val);
+
+    bool updateBy(@(struct_name) info, KeyValueMap map);
+
+    bool removeBy(QString name, QVariant val);
+
+    bool removeBy(KeyValueMap map);
+
+    QList<SQLiteColumnInfo> _column_info;
+
+    @(database_manager_name) &_dbManager;
+
+    QMap<QString, QVariant> @(table_name)InfoToVariantMap(@(struct_name) info);
+
+    @(struct_name) @(table_name)InfoFromVariantList(QVariantList list);
+
+    int getColumnIndex(QString column);
+
+    @[for column in column_info]@
+        QList<@(column["qt_type"])> get@(column["name"].capitalize())(QMap<QString, QVariant> key_value, QString sort_name = "");
+    @[end for]
+
+signals:
+    void @(table_name)Changed();
+
+
+};
+
+#endif // @(class_name.upper() + "_H")
