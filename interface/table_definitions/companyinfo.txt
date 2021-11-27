@@ -1,0 +1,11 @@
+company_info
+INTEGER id toInt int
+TEXT name toString QString
+TEXT postal_number toString QString
+TEXT postal_city toString QString
+TEXT location toString QString
+TEXT phone_number toString QString
+TEXT email toString QString
+TEXT tin_number toString QString
+TEXT nssf_nr toString QString
+TEXT nssf_ctrl_nr toString QString

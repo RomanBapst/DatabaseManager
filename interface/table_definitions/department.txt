@@ -1,0 +1,4 @@
+department
+INTEGER id toInt int
+TEXT description toString QString
+INTEGER has_sdl toBool bool

@@ -1,0 +1,5 @@
+payroll_list
+INTEGER id toInt int 
+DATE start_date toDate QDate
+DATE end_date toDate QDate
+TEXT name toString QString

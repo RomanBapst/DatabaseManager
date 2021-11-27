@@ -1,0 +1,5 @@
+work_type
+INTEGER id toInt int
+INTEGER default_pay toInt int
+TEXT description toString QString 
+INTEGER is_active toBool bool

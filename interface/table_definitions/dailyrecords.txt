@@ -1,0 +1,8 @@
+daily_record
+INTEGER id toInt int
+DATE date toDate QDate
+INTEGER employee_id toInt int
+INTEGER work_type toInt int
+INTEGER pay toInt int
+INTEGER location toInt int
+TEXT description toString QString
