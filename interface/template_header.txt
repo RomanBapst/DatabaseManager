@@ -51,6 +51,8 @@ public:
         } else if (index == @(column_info.index(column))) {
             return "@(column["name"])";
     @[end for]
+        } else {
+            return QString("");
     }
     }
 
