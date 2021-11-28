@@ -1,0 +1,3 @@
+location
+INTEGER id toInt int
+TEXT description toString QString
