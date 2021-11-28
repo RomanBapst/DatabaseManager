@@ -6,3 +6,6 @@ INTEGER work_type toInt int
 INTEGER pay toInt int
 INTEGER location toInt int
 TEXT description toString QString
+TEXT location_string toString QString
+TEXT work_quantity_description toString QString
+REAL work_quantity toDouble double
