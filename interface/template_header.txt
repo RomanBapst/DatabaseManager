@@ -69,13 +69,13 @@ public:
     }
     }
 
-    QList<@(struct_name)> get@(struct_name)(QMap<QString, QVariant> key_value, QString sort_name = "", QString sqlite_filter="");
+    QList<@(struct_name)> get@(struct_name)(QMap<QString, QVariant> key_value, QString sort_name = "", QString sqlite_filter="") const;
 
     int add@(struct_name)(@(struct_name) info);
 
-    @(struct_name) get@(struct_name)ByID(int id);
+    @(struct_name) get@(struct_name)ByID(int id) const;
 
-    QList<@(struct_name)> get@(struct_name)By(QString name, QVariant value, QString sort_name = "", QString sqlite_filter="");
+    QList<@(struct_name)> get@(struct_name)By(QString name, QVariant value, QString sort_name = "", QString sqlite_filter="") const;
 
     bool updateByID(@(struct_name) info, int id);
 
@@ -99,7 +99,7 @@ public:
 
     QMap<QString, QVariant> @(table_name)InfoToVariantMap(@(struct_name) info);
 
-    @(struct_name) @(table_name)InfoFromVariantList(QVariantList list);
+    @(struct_name) @(table_name)InfoFromVariantList(QVariantList list) const;
 
     int getColumnIndex(QString column);
 
