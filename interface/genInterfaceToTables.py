@@ -18,6 +18,10 @@ for file_name in all_files:
         col["default"] = "NULL"
         col["conversion"] = items[2].rstrip("\n")
         col["qt_type"] = items[3].rstrip("\n")
+
+        if len(items) > 4:
+           col["default"] = items[4].rstrip("\n")
+
         column_info.append(col)
 
     if file_name.endswith(".txt"):
