@@ -16,3 +16,4 @@ INTEGER salary_fixed toInt int
 INTEGER bonus toInt int
 INTEGER overtime toInt int
 TEXT department_name toString QString
+INTEGER department_id toInt int
