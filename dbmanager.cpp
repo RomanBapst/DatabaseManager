@@ -35,10 +35,22 @@ QStringList DbManager::getTableItems(QString table)
     return ret;
 }
 
-void DbManager::addColumnToTable(QString table, QString column, QString data_type)
+void DbManager::addColumnToTable(QString table, QString column, QString data_type, QVariant default_val)
 {
     QSqlQuery query(m_db);
-    query.exec(QString("ALTER TABLE %1 ADD COLUMN %2 %3").arg(table).arg(column).arg(data_type));
+    QString query_string = QString("ALTER TABLE %1 ADD COLUMN %2 %3").arg(table).arg(column).arg(data_type);
+
+    if (!default_val.isNull()) {
+        query_string.append(" DEFAULT=?");
+    }
+
+    query.prepare(query_string);
+
+    if (!default_val.isNull()) {
+        query.addBindValue(default_val);
+    }
+
+    query.exec(query_string);
 }
 
 void DbManager::setupDatabase(QString path, QString name)
@@ -139,12 +151,9 @@ QList<QVariantList> DbManager::getDataFromTable(QString table_name, QList<SQLite
     }
 
     query_string = query_string.arg(item_data_string).arg(table_name).arg(where_string).arg(sorting);
-    //qInfo() << query_string;
     QSqlQuery query(m_db);
 
     query.prepare(query_string);
-
-   // qInfo() << query_string;
 
     if (sqlite_filter.isEmpty()) {
         for (auto &item : map.keys()) {
