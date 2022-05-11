@@ -31,6 +31,7 @@ public:
 
     void closeDataBase();
 
+    bool updateDatabaseVersion();
     QStringList getTableItems(QString table);
 
     QStringList getAllTableNames();

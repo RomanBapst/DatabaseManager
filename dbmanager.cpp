@@ -102,6 +102,121 @@ void DbManager::createTable(QString table_name, QList<SQLiteColumnInfo> column_i
 
      QSqlQuery query(m_db);
      query.exec(query_string);
+bool DbManager::updateDatabaseVersion()
+{
+    bool success = true;
+    if (m_db.isOpen()) {
+        return false;
+    }
+
+    QSqlQuery query(m_db);
+
+    success &= query.prepare("PRAGMA user_version");
+    success &= query.exec();
+    success &= query.first();
+
+    int version = query.value(0).toInt();
+    int new_version = version;
+
+    success &= query.exec("PRAGMA foreign_keys = ON");
+
+    if (!success) {
+        return false;
+    }
+
+    if(!m_db.transaction()) {
+        return false;
+    }
+
+    bool updated_version = true;
+
+    switch (version) {
+    case 0: { // update version from 0 to 1
+
+        // get all departments ids from employee table
+        QList<int> employee_dep_id;
+
+        QMap<int, QString> dep_id_to_name_map;
+        dep_id_to_name_map[1] = "Director";
+        dep_id_to_name_map[2] = "Sugar Cane";
+        dep_id_to_name_map[3] = "Ranch";
+        dep_id_to_name_map[4] = "House";
+        dep_id_to_name_map[5] = "Workshop";
+        dep_id_to_name_map[6] = "Ranch Patrol";
+        dep_id_to_name_map[7] = "Hydropower";
+        dep_id_to_name_map[8] = "Watchman Sugar Cane";
+        dep_id_to_name_map[9] = "Watchman";
+
+        // add all known departments to the table if they don't exist yet
+        for (auto &dep_id : dep_id_to_name_map.keys()) {
+            success &= query.prepare("SELECT id FROM department WHERE id=?");
+            query.addBindValue(dep_id);
+            success &=query.exec();
+
+            if (!query.next()) {
+                success &= query.prepare("INSERT INTO department (id,description,has_sdl) VALUES(?,?,?)");
+                query.addBindValue(dep_id);
+                query.addBindValue(dep_id_to_name_map[dep_id]);
+                query.addBindValue(0);
+                success &= query.exec();
+            }
+
+        }
+
+        success &= query.exec("SELECT department FROM employees");
+        while(query.next()) {
+            int id = query.value(0).toInt();
+            if (!employee_dep_id.contains(id)) {
+                employee_dep_id.append(id);
+            }
+        }
+
+        for (auto& dep_id : employee_dep_id) {
+            success &= query.exec("SELECT id FROM department WHERE id=" + QString::number(dep_id));
+
+            if (!query.next()) {
+                // unknown department ID, we need to get rid of it
+                success &= query.prepare("UPDATE employees SET department=? WHERE department=?");
+                query.addBindValue(QVariant(QVariant::Int));
+                query.addBindValue(dep_id);
+                success &= query.exec();
+            }
+        }
+
+
+        success &= query.prepare("CREATE TABLE employees2 (id INTEGER PRIMARY KEY, surname TEXT, name TEXT, nssf INTEGER DEFAULT 0,tipau INTEGER DEFAULT 0, sdl INTEGER DEFAULT 0, paye INTEGER DEFAULT 0, rate_normal INTEGER DEFAULT 0, salary_fixed INTEGER DEFAULT 0, department INTEGER DEFAULT 0, nssf_number TEXT, inactive INTEGER DEFAULT 0, is_active INTEGER DEFAULT 0, tin_number TEXT, nida_number TEXT, mobile_number TEXT, bank_account TEXT, bank_name TEXT, uuid TEXT, FOREIGN KEY(department) REFERENCES department(id))");
+
+        success &= query.exec();
+        success &= query.prepare("INSERT INTO employees2 SELECT * FROM employees");
+
+        success &= query.exec();
+
+
+        success &= query.exec("DROP TABLE employees");
+        success &= query.exec("ALTER TABLE employees2 RENAME TO employees");
+
+        new_version++;
+
+        break;
+    }
+
+    default:
+        // if we get in here then it means that the database was already at the newest version
+        updated_version = false;
+
+    }
+
+    if (success) {
+        success &= query.prepare(QString("PRAGMA user_version =") + QString::number(new_version));
+        success &= query.exec();
+    }
+
+    if (success) {
+        m_db.commit();
+    } else {
+        m_db.rollback();
+    }
+
 }
 
 QList<QVariantList> DbManager::getDataFromTable(QString table_name, QList<SQLiteColumnInfo> items, QMap<QString, QVariant> map, QString sort_name, QString sqlite_filter)
