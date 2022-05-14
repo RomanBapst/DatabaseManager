@@ -91,7 +91,7 @@ void DbManager::createTable(QString table_name, QList<SQLiteColumnInfo> column_i
             item_data_string = item_data_string.append(item.name + " " + item.data_type + " DEFAULT " + item.default_val + ",");
         }
 
-       counter++;
+        counter++;
     }
 
     item_data_string = item_data_string.remove(item_data_string.size()-1, 1);
@@ -100,13 +100,16 @@ void DbManager::createTable(QString table_name, QList<SQLiteColumnInfo> column_i
     query_string = query_string.arg(table_name).arg(item_data_string);
 
 
-     QSqlQuery query(m_db);
-     query.exec(query_string);
-bool DbManager::updateDatabaseVersion()
+    QSqlQuery query(m_db);
+    query.exec(query_string);
+
+}
+
+int DbManager::updateDatabaseVersion()
 {
     bool success = true;
-    if (m_db.isOpen()) {
-        return false;
+    if (!m_db.isOpen()) {
+        return -1;
     }
 
     QSqlQuery query(m_db);
@@ -121,11 +124,11 @@ bool DbManager::updateDatabaseVersion()
     success &= query.exec("PRAGMA foreign_keys = ON");
 
     if (!success) {
-        return false;
+        return new_version;
     }
 
     if(!m_db.transaction()) {
-        return false;
+        return new_version;
     }
 
     bool updated_version = true;
@@ -163,38 +166,41 @@ bool DbManager::updateDatabaseVersion()
 
         }
 
-        success &= query.exec("SELECT department FROM employees");
-        while(query.next()) {
-            int id = query.value(0).toInt();
-            if (!employee_dep_id.contains(id)) {
-                employee_dep_id.append(id);
-            }
-        }
+        success &= cleanupTableDependencyPriorForeignKey(QString("employees"), QString("department"), QString("department"), QString("id"), QVariant(QVariant::Int));
 
-        for (auto& dep_id : employee_dep_id) {
-            success &= query.exec("SELECT id FROM department WHERE id=" + QString::number(dep_id));
+        QString new_table_sql_statement("CREATE TABLE employees2 \
+                 (id INTEGER PRIMARY KEY NOT NULL, surname TEXT NOT NULL, name TEXT NOT NULL, \
+                 nssf INTEGER DEFAULT 0,tipau INTEGER DEFAULT 0, sdl INTEGER DEFAULT 0,\
+                 paye INTEGER DEFAULT 0, rate_normal INTEGER DEFAULT 0, \
+                salary_fixed INTEGER DEFAULT 0, department INTEGER DEFAULT 0, nssf_number TEXT, \
+                inactive INTEGER DEFAULT 0, is_active INTEGER DEFAULT 0, tin_number TEXT, \
+                nida_number TEXT, mobile_number TEXT, bank_account TEXT, bank_name TEXT, \
+                FOREIGN KEY(department) REFERENCES department(id))");
+        success&= replaceTable(QString("employees"), new_table_sql_statement);
 
-            if (!query.next()) {
-                // unknown department ID, we need to get rid of it
-                success &= query.prepare("UPDATE employees SET department=? WHERE department=?");
-                query.addBindValue(QVariant(QVariant::Int));
-                query.addBindValue(dep_id);
-                success &= query.exec();
-            }
-        }
+        // update daily records table
+        success &= cleanupTableDependencyPriorForeignKey(QString("daily_record"), QString("location"), QString("location"), QString("id"), QVariant(QVariant::Int));
 
+        new_table_sql_statement = QString("CREATE TABLE daily_record2 \
+                 (id INTEGER PRIMARY KEY,date DATE DEFAULT NULL,employee_id INTEGER DEFAULT NULL,\
+                work_type INTEGER DEFAULT NULL,pay INTEGER DEFAULT NULL,location INTEGER DEFAULT NULL,\
+                description TEXT DEFAULT NULL,location_string TEXT DEFAULT NULL,\
+                work_quantity_description TEXT DEFAULT NULL,work_quantity REAL DEFAULT NULL, \
+                FOREIGN KEY(employee_id) REFERENCES employees(id), FOREIGN KEY(work_type) REFERENCES work_type(id), \
+                FOREIGN KEY(location) REFERENCES location(id))");
 
-        success &= query.prepare("CREATE TABLE employees2 (id INTEGER PRIMARY KEY, surname TEXT, name TEXT, nssf INTEGER DEFAULT 0,tipau INTEGER DEFAULT 0, sdl INTEGER DEFAULT 0, paye INTEGER DEFAULT 0, rate_normal INTEGER DEFAULT 0, salary_fixed INTEGER DEFAULT 0, department INTEGER DEFAULT 0, nssf_number TEXT, inactive INTEGER DEFAULT 0, is_active INTEGER DEFAULT 0, tin_number TEXT, nida_number TEXT, mobile_number TEXT, bank_account TEXT, bank_name TEXT, uuid TEXT, FOREIGN KEY(department) REFERENCES department(id))");
+        success &= replaceTable(QString("daily_record"), new_table_sql_statement);
 
-        success &= query.exec();
-        success &= query.prepare("INSERT INTO employees2 SELECT * FROM employees");
+        success &= cleanupTableDependencyPriorForeignKey(QString("payroll_entry"), QString("payroll_id"), QString("payroll_list"), QString("id"), QVariant(QVariant::Int));
 
-        success &= query.exec();
+        new_table_sql_statement = QString("CREATE TABLE payroll_entry2 \
+                (payroll_id INTEGER, employee_id INTEGER, nssf INTEGER DEFAULT 0, tipau INTEGER DEFAULT 0,\
+                sdl INTEGER DEFAULT 0, paye INTEGER DEFAULT 0, days_normal INTEGER DEFAULT 0, rate_normal INTEGER DEFAULT 0, \
+                days_special INTEGER DEFAULT 0, rate_special INTEGER DEFAULT 0,sugar_cane_related INTEGER DEFAULT 0, \
+                auxilliary INTEGER DEFAULT 0, salary_fixed INTEGER DEFAULT 0, bonus INTEGER, overtime INTEGER,\
+                FOREIGN KEY(employee_id) REFERENCES employees(id), FOREIGN KEY(payroll_id) REFERENCES payroll_list(id))");
 
-
-        success &= query.exec("DROP TABLE employees");
-        success &= query.exec("ALTER TABLE employees2 RENAME TO employees");
-
+        success &= replaceTable(QString("payroll_entry"), new_table_sql_statement);
         new_version++;
 
         break;
@@ -215,8 +221,68 @@ bool DbManager::updateDatabaseVersion()
         m_db.commit();
     } else {
         m_db.rollback();
+        new_version = version;
     }
 
+    return new_version;
+
+}
+
+bool DbManager::replaceTable(QString table_name, QString sql_create_statement)
+{
+    bool success = true;
+    QSqlQuery query(m_db);
+
+    QString existing_col_string;
+
+    success &= query.exec(QString("PRAGMA table_info(%1)").arg(table_name));
+
+    while(query.next()) {
+        existing_col_string.append(query.value(1).toString() + QString(","));
+    }
+
+    int last_pos = existing_col_string.lastIndexOf(QChar(','));
+    existing_col_string = existing_col_string.left(last_pos);
+
+    success &= query.prepare(sql_create_statement);
+    success &= query.exec();
+
+    QString query_string = QString("INSERT INTO %1 (%2) SELECT %2 FROM %3").arg(table_name+QString("2")).arg(existing_col_string).arg(table_name);
+    success &= query.prepare(query_string);
+    success &= query.exec();
+    success &= query.exec(QString("DROP TABLE %1").arg(table_name));
+    success &= query.exec(QString("ALTER TABLE %1 RENAME TO %2").arg(table_name+QString("2")).arg(table_name));
+
+    return success;
+}
+
+bool DbManager::cleanupTableDependencyPriorForeignKey(QString childTable, QString childCol, QString parentTable, QString parentCol, QVariant default_val)
+{
+    bool success = true;
+    QSqlQuery query(m_db);
+    success &= query.exec(QString("SELECT %1 FROM %2").arg(childCol).arg(childTable));
+
+    QList<int> foreign_keys;
+
+    while(query.next()) {
+        int val = query.value(0).toInt();
+        if (!foreign_keys.contains(val)) {
+            foreign_keys.append(val);
+        }
+    }
+
+    for (auto &id : foreign_keys) {
+        success &= query.exec(QString("SELECT %1 FROM %2 WHERE %1=%3").arg(parentCol).arg(parentTable).arg(QString::number(id)));
+
+        if (!query.next()) {
+            success &= query.prepare(QString("UPDATE %1 SET %2=? WHERE %2=?").arg(childTable).arg(childCol));
+            query.addBindValue(default_val);
+            query.addBindValue(id);
+            success &= query.exec();
+        }
+    }
+
+    return success;
 }
 
 QList<QVariantList> DbManager::getDataFromTable(QString table_name, QList<SQLiteColumnInfo> items, QMap<QString, QVariant> map, QString sort_name, QString sqlite_filter)
@@ -259,7 +325,7 @@ QList<QVariantList> DbManager::getDataFromTable(QString table_name, QList<SQLite
 
     query.prepare(query_string);
 
-   // qInfo() << query_string;
+    // qInfo() << query_string;
 
     if (sqlite_filter.isEmpty()) {
         for (auto &item : map.keys()) {

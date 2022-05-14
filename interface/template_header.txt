@@ -10,9 +10,31 @@
 
 
 struct @(struct_name) {
+
+public:
+@[for column in column_info]@
+    void set_@(column["name"])(@(column["qt_type"]) arg) {
+        @(column["name"]) = arg;
+        @(column["name"])_default = false;
+    }
+@[end for]
+
+@[for column in column_info]@
+    @(column["qt_type"]) get_@(column["name"])() { return  @(column["name"]);}
+@[end for]
+
+@[for column in column_info]@
+bool is_@(column["name"])_default() { return  @(column["name"])_default; }
+@[end for]
+
+private:
 @[for column in column_info]@
     @(column["qt_type"]) @(column["name"]);
 @[end for]
+
+    @[for column in column_info]@
+    bool @(column["name"])_default = true;
+    @[end for]
 
 friend bool operator==(const @(struct_name)& lhs, const @(struct_name)& rhs) {
     return rhs.id == lhs.id;

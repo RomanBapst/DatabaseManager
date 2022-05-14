@@ -28,7 +28,10 @@ QMap<QString, QVariant> @(class_name)::@(table_name)InfoToVariantMap(@(struct_na
 {
     QMap<QString, QVariant> ret;
     @[for column in column_info]@
-    ret["@(column["name"])"] = info.@(column["name"]);
+    if (!info.is_@(column["name"])_default()) {
+        ret["@(column["name"])"] = info.get_@(column["name"])();
+    }
+
     @[end for]
 
     return ret;
@@ -40,7 +43,9 @@ QMap<QString, QVariant> @(class_name)::@(table_name)InfoToVariantMap(@(struct_na
     @(struct_name) info = {};
 
     @[for index in range(len(column_info))]@
-    info.@(column_info[index]["name"]) = list.value(@(index)).@(column_info[index]["conversion"])();
+    if (!list.value(@(index)).isNull()) {
+        info.set_@(column_info[index]["name"])(list.value(@(index)).@(column_info[index]["conversion"])());
+    }
     @[end for]
     return info;
 }

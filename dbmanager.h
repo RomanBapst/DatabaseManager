@@ -31,7 +31,7 @@ public:
 
     void closeDataBase();
 
-    bool updateDatabaseVersion();
+    int updateDatabaseVersion();
     QStringList getTableItems(QString table);
 
     QStringList getAllTableNames();
@@ -58,6 +58,9 @@ signals:
 
 private:
     QSqlDatabase m_db;
+
+    bool replaceTable(QString table_name, QString sql_create_statement);
+    bool cleanupTableDependencyPriorForeignKey(QString childTable, QString childCol, QString parentTable, QString parentCol, QVariant default_val);
 };
 
 #endif // DBMANAGER_H
