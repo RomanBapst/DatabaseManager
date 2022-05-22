@@ -154,9 +154,7 @@ bool @(class_name)::updateByID(@(struct_name) info, int id)
 
 bool @(class_name)::removeByID(int id)
 {
-    _dbManager.deleteDataInTable("@(db_table)", KeyValueMap({{"id", id}}));
-
-    return true;
+    return _dbManager.deleteDataInTable("@(db_table)", KeyValueMap({{"id", id}}));
 }
 
 bool @(class_name)::updateBy(@(struct_name) info, KeyValueMap map)

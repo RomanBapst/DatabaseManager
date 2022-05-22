@@ -27,6 +27,11 @@ public:
 bool is_@(column["name"])_default() { return  @(column["name"])_default; }
 @[end for]
 
+@[for column in column_info]@
+void set_@(column["name"])_default() { @(column["name"])_default = true; }
+@[end for]
+
+
 private:
 @[for column in column_info]@
     @(column["qt_type"]) @(column["name"]);
