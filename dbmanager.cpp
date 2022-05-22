@@ -172,7 +172,7 @@ int DbManager::updateDatabaseVersion()
                  (id INTEGER PRIMARY KEY NOT NULL, surname TEXT NOT NULL, name TEXT NOT NULL, \
                  nssf INTEGER DEFAULT 0,tipau INTEGER DEFAULT 0, sdl INTEGER DEFAULT 0,\
                  paye INTEGER DEFAULT 0, rate_normal INTEGER DEFAULT 0, \
-                salary_fixed INTEGER DEFAULT 0, department INTEGER DEFAULT 0, nssf_number TEXT, \
+                salary_fixed INTEGER DEFAULT 0, department INTEGER DEFAULT NULL, nssf_number TEXT, \
                 inactive INTEGER DEFAULT 0, is_active INTEGER DEFAULT 0, tin_number TEXT, \
                 nida_number TEXT, mobile_number TEXT, bank_account TEXT, bank_name TEXT, \
                 FOREIGN KEY(department) REFERENCES department(id))");
@@ -489,9 +489,7 @@ bool DbManager::deleteDataInTable(QString table_name, QMap<QString, QVariant> fi
         query.addBindValue(filter[item]);
     }
 
-    query.exec();
-
-    return true;
+    return query.exec();
 }
 
 int DbManager::addDataToTable(QString table_name, FilterMap data)
@@ -521,7 +519,7 @@ int DbManager::addDataToTable(QString table_name, FilterMap data)
 
     query_string = query_string.arg(table_name).arg(item_data_string).arg(values_string);
 
-    //qInfo() << query_string;
+    qInfo() << query_string;
 
     QSqlQuery query(m_db);
 
@@ -531,7 +529,9 @@ int DbManager::addDataToTable(QString table_name, FilterMap data)
         query.addBindValue(data[item]);
     }
 
-    query.exec();
+    bool res = query.exec();
+
+    qInfo() << "the query result " << query.lastError();
 
     return query.lastInsertId().toInt();
 }
