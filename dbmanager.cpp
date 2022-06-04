@@ -193,11 +193,13 @@ int DbManager::updateDatabaseVersion()
 
         success &= cleanupTableDependencyPriorForeignKey(QString("payroll_entry"), QString("payroll_id"), QString("payroll_list"), QString("id"), QVariant(QVariant::Int));
 
+        success &= cleanupTableDependencyPriorForeignKey(QString("payroll_entry"), QString("employee_id"), QString("employees"), QString("id"), QVariant(QVariant::Int));
+
         new_table_sql_statement = QString("CREATE TABLE payroll_entry2 \
                 (payroll_id INTEGER, employee_id INTEGER, nssf INTEGER DEFAULT 0, tipau INTEGER DEFAULT 0,\
                 sdl INTEGER DEFAULT 0, paye INTEGER DEFAULT 0, days_normal INTEGER DEFAULT 0, rate_normal INTEGER DEFAULT 0, \
                 days_special INTEGER DEFAULT 0, rate_special INTEGER DEFAULT 0,sugar_cane_related INTEGER DEFAULT 0, \
-                auxilliary INTEGER DEFAULT 0, salary_fixed INTEGER DEFAULT 0, bonus INTEGER, overtime INTEGER,\
+                auxilliary INTEGER DEFAULT 0, salary_fixed INTEGER DEFAULT 0, bonus INTEGER, overtime INTEGER,  id INTEGER DEFAULT NULL, department_name TEXT,\
                 FOREIGN KEY(employee_id) REFERENCES employees(id), FOREIGN KEY(payroll_id) REFERENCES payroll_list(id))");
 
         success &= replaceTable(QString("payroll_entry"), new_table_sql_statement);
