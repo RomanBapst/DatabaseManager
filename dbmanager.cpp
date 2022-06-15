@@ -168,6 +168,8 @@ int DbManager::updateDatabaseVersion()
 
         success &= cleanupTableDependencyPriorForeignKey(QString("employees"), QString("department"), QString("department"), QString("id"), QVariant(QVariant::Int));
 
+        query.clear();
+
         QString new_table_sql_statement("CREATE TABLE employees2 \
                  (id INTEGER PRIMARY KEY NOT NULL, surname TEXT NOT NULL, name TEXT NOT NULL, \
                  nssf INTEGER DEFAULT 0,tipau INTEGER DEFAULT 0, sdl INTEGER DEFAULT 0,\
@@ -179,6 +181,8 @@ int DbManager::updateDatabaseVersion()
         success&= replaceTable(QString("employees"), new_table_sql_statement);
 
         // update daily records table
+        success &= cleanupTableDependencyPriorForeignKey(QString("daily_record"), QString("employee_id"), QString("employees"), QString("id"), QVariant(QVariant::Int));
+        success &= cleanupTableDependencyPriorForeignKey(QString("daily_record"), QString("work_type"), QString("work_type"), QString("id"), QVariant(QVariant::Int));
         success &= cleanupTableDependencyPriorForeignKey(QString("daily_record"), QString("location"), QString("location"), QString("id"), QVariant(QVariant::Int));
 
         new_table_sql_statement = QString("CREATE TABLE daily_record2 \
@@ -189,18 +193,24 @@ int DbManager::updateDatabaseVersion()
                 FOREIGN KEY(employee_id) REFERENCES employees(id), FOREIGN KEY(work_type) REFERENCES work_type(id), \
                 FOREIGN KEY(location) REFERENCES location(id))");
 
+        query.clear();
+
         success &= replaceTable(QString("daily_record"), new_table_sql_statement);
 
         success &= cleanupTableDependencyPriorForeignKey(QString("payroll_entry"), QString("payroll_id"), QString("payroll_list"), QString("id"), QVariant(QVariant::Int));
-
         success &= cleanupTableDependencyPriorForeignKey(QString("payroll_entry"), QString("employee_id"), QString("employees"), QString("id"), QVariant(QVariant::Int));
+        success &= cleanupTableDependencyPriorForeignKey(QString("payroll_entry"), QString("department_id"), QString("department"), QString("id"), QVariant(QVariant::Int));
+
 
         new_table_sql_statement = QString("CREATE TABLE payroll_entry2 \
                 (payroll_id INTEGER, employee_id INTEGER, nssf INTEGER DEFAULT 0, tipau INTEGER DEFAULT 0,\
                 sdl INTEGER DEFAULT 0, paye INTEGER DEFAULT 0, days_normal INTEGER DEFAULT 0, rate_normal INTEGER DEFAULT 0, \
                 days_special INTEGER DEFAULT 0, rate_special INTEGER DEFAULT 0,sugar_cane_related INTEGER DEFAULT 0, \
                 auxilliary INTEGER DEFAULT 0, salary_fixed INTEGER DEFAULT 0, bonus INTEGER, overtime INTEGER,  id INTEGER DEFAULT NULL, department_name TEXT,\
-                FOREIGN KEY(employee_id) REFERENCES employees(id), FOREIGN KEY(payroll_id) REFERENCES payroll_list(id))");
+                department_id INTEGER DEFAULT NULL, FOREIGN KEY(employee_id) REFERENCES employees(id), FOREIGN KEY(payroll_id) REFERENCES payroll_list(id),\
+                FOREIGN KEY(department_id) REFERENCES department(id))");
+
+        query.clear();
 
         success &= replaceTable(QString("payroll_entry"), new_table_sql_statement);
         new_version++;
@@ -239,6 +249,7 @@ bool DbManager::replaceTable(QString table_name, QString sql_create_statement)
 
     success &= query.exec(QString("PRAGMA table_info(%1)").arg(table_name));
 
+
     while(query.next()) {
         existing_col_string.append(query.value(1).toString() + QString(","));
     }
@@ -252,7 +263,9 @@ bool DbManager::replaceTable(QString table_name, QString sql_create_statement)
     QString query_string = QString("INSERT INTO %1 (%2) SELECT %2 FROM %3").arg(table_name+QString("2")).arg(existing_col_string).arg(table_name);
     success &= query.prepare(query_string);
     success &= query.exec();
+
     success &= query.exec(QString("DROP TABLE %1").arg(table_name));
+
     success &= query.exec(QString("ALTER TABLE %1 RENAME TO %2").arg(table_name+QString("2")).arg(table_name));
 
     return success;
@@ -322,12 +335,9 @@ QList<QVariantList> DbManager::getDataFromTable(QString table_name, QList<SQLite
     }
 
     query_string = query_string.arg(item_data_string).arg(table_name).arg(where_string).arg(sorting);
-    //qInfo() << query_string;
     QSqlQuery query(m_db);
 
     query.prepare(query_string);
-
-    // qInfo() << query_string;
 
     if (sqlite_filter.isEmpty()) {
         for (auto &item : map.keys()) {
@@ -521,8 +531,6 @@ int DbManager::addDataToTable(QString table_name, FilterMap data)
 
     query_string = query_string.arg(table_name).arg(item_data_string).arg(values_string);
 
-    qInfo() << query_string;
-
     QSqlQuery query(m_db);
 
     query.prepare(query_string);
@@ -533,7 +541,7 @@ int DbManager::addDataToTable(QString table_name, FilterMap data)
 
     bool res = query.exec();
 
-    qInfo() << "the query result " << query.lastError();
+    qInfo() << query.lastError().text() << query_string;
 
     return query.lastInsertId().toInt();
 }
