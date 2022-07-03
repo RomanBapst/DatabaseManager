@@ -185,6 +185,8 @@ int DbManager::updateDatabaseVersion()
         success &= cleanupTableDependencyPriorForeignKey(QString("daily_record"), QString("work_type"), QString("work_type"), QString("id"), QVariant(QVariant::Int));
         success &= cleanupTableDependencyPriorForeignKey(QString("daily_record"), QString("location"), QString("location"), QString("id"), QVariant(QVariant::Int));
 
+        success &= enforLocationIdInDailyRecordsTable();
+
         new_table_sql_statement = QString("CREATE TABLE daily_record2 \
                  (id INTEGER PRIMARY KEY,date DATE DEFAULT NULL,employee_id INTEGER DEFAULT NULL,\
                 work_type INTEGER DEFAULT NULL,pay INTEGER DEFAULT NULL,location INTEGER DEFAULT NULL,\
@@ -235,6 +237,8 @@ int DbManager::updateDatabaseVersion()
         m_db.rollback();
         new_version = version;
     }
+
+    _database_version = new_version;
 
     return new_version;
 
@@ -294,6 +298,73 @@ bool DbManager::cleanupTableDependencyPriorForeignKey(QString childTable, QStrin
             query.addBindValue(default_val);
             query.addBindValue(id);
             success &= query.exec();
+        }
+    }
+
+    return success;
+}
+
+
+bool DbManager::enforLocationIdInDailyRecordsTable()
+{
+    bool success = true;
+    QSqlQuery query(m_db);
+
+    success &= query.exec("SELECT location,location_string,id FROM daily_record WHERE location_string NOT NULL");
+
+    QList<QString> location_string_list_without_id;
+    QList<int> record_id_to_fix;
+
+    while(query.next()) {
+        QString location_string = query.value(1).toString();
+
+        if (query.value(0).isNull()) {
+            if (!location_string_list_without_id.contains(location_string)) {
+                location_string_list_without_id.append(location_string);
+            }
+
+            record_id_to_fix.append(query.value(2).toInt());
+        }
+    }
+
+    for (auto item : location_string_list_without_id) {
+        qInfo() << item;
+    }
+
+    // add locations which are not yet present
+    for(auto location_string : location_string_list_without_id) {
+        success &= query.prepare("SELECT id FROM location WHERE description=?");
+        query.addBindValue(location_string);
+        success &= query.exec();
+
+        if (!query.first()) {
+            // record does not exist, add it
+            success &= addDataToTable("location", FilterMap({{"description", location_string}})) >=0;
+        }
+    }
+
+    // go througth every record and update the location id where it's missing
+    for (auto id : record_id_to_fix) {
+
+        success &= query.prepare("SELECT location_string FROM daily_record WHERE id=?");
+        query.addBindValue(id);
+        success &= query.exec();
+
+        while(query.next()) {   // records
+            QString location_string = query.value(0).toString();
+
+            QSqlQuery query2(m_db);
+            success &= query2.prepare("SELECT id FROM location WHERE description=?");
+            query2.addBindValue(location_string);
+            success &= query2.exec();
+
+            while(query2.next()) { // location id
+                QSqlQuery query3(m_db);
+                success &= query3.prepare("UPDATE daily_record SET location=? WHERE id=?");
+                query3.addBindValue(query2.value(0));
+                query3.addBindValue(id);
+                success &= query3.exec();
+            }
         }
     }
 
