@@ -24,6 +24,16 @@ public:
 @[end for]
 
 @[for column in column_info]@
+    QVariant get_@(column["name"])_variant() const {
+        if (@(column["name"])_default) {
+            return QVariant();
+        }
+        
+        return  QVariant(@(column["name"]));
+    }
+@[end for]
+
+@[for column in column_info]@
 bool is_@(column["name"])_default() { return  @(column["name"])_default; }
 @[end for]
 
