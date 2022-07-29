@@ -21,7 +21,7 @@ class DbManager: public QObject
 {
     Q_OBJECT
 public:
-    DbManager();
+    DbManager(QObject *parent);
 
     ~DbManager();
 

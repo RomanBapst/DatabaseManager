@@ -1,7 +1,8 @@
 
 #include "@(class_header_name)"
 
-@(class_name)::@(class_name)(@(database_manager_name)& dbManager) :
+@(class_name)::@(class_name)(QObject *parent, @(database_manager_name)& dbManager) :
+    QObject(parent),
     _dbManager(dbManager)
 {
 
@@ -11,6 +12,10 @@
                                          .default_val = "@(column["default"])"});
 @[end for]
 
+}
+
+void @(class_name)::init()
+{
     // create the table if it does not exist yet
     _dbManager.createTable("@(db_table)", _column_info);
 
@@ -21,7 +26,6 @@
             _dbManager.addColumnToTable("@(db_table)", item.name, item.data_type);
         }
     }
-
 }
 
 QMap<QString, QVariant> @(class_name)::@(table_name)InfoToVariantMap(@(struct_name) info)
@@ -149,43 +153,70 @@ int @(class_name)::getColumnIndex(QString column)
 bool @(class_name)::updateByID(@(struct_name) info, int id)
 {
     _dbManager.updateDataInTable("@(db_table)", @(table_name)InfoToVariantMap(info), KeyValueMap({{"id", id}}));
+    emit @(table_name)Changed();
     return true;
 }
 
 bool @(class_name)::removeByID(int id)
 {
-    return _dbManager.deleteDataInTable("@(db_table)", KeyValueMap({{"id", id}}));
+    bool ret = _dbManager.deleteDataInTable("@(db_table)", KeyValueMap({{"id", id}}));
+    if (ret) {
+        emit @(table_name)Changed();
+    }
+
+    return ret;
 }
 
 bool @(class_name)::updateBy(@(struct_name) info, KeyValueMap map)
 {
-    _dbManager.updateDataInTable("@(db_table)", @(table_name)InfoToVariantMap(info), map);
-    return true;
+    bool ret = _dbManager.updateDataInTable("@(db_table)", @(table_name)InfoToVariantMap(info), map);
+
+    if (ret) {
+        emit @(table_name)Changed();
+    }
+    return ret;
 }
 
 bool @(class_name)::removeBy(QString name, QVariant val)
 {
-    _dbManager.deleteDataInTable("@(db_table)", KeyValueMap({{name, val}}));
-    return true;
+    bool ret = _dbManager.deleteDataInTable("@(db_table)", KeyValueMap({{name, val}}));
+
+    if (ret) {
+        emit @(table_name)Changed();
+    }
+    return ret;
 }
 
 bool @(class_name)::removeBy(KeyValueMap map)
 {
-    _dbManager.deleteDataInTable("@(db_table)", map);
-    return true;
+    bool ret = _dbManager.deleteDataInTable("@(db_table)", map);
+
+    if (ret) {
+        emit @(table_name)Changed();
+    }
+
+    return ret;
 }
 
 @[for column in column_info]@
 bool @(class_name)::update@(column["name"].capitalize())ByID(int id, QVariant val)
 {
-    _dbManager.updateDataInTable("@(db_table)", KeyValueMap({{"@(column["name"])", val}}), KeyValueMap({{"id", id}}));
-    return true;
+    bool ret = _dbManager.updateDataInTable("@(db_table)", KeyValueMap({{"@(column["name"])", val}}), KeyValueMap({{"id", id}}));
+
+    if (ret) {
+        emit @(table_name)Changed();
+    }
+    return ret;
 }
 @[end for]
 
 bool @(class_name)::updateColumnByID(int col, int id, QVariant val)
 {
     QString col_name = getNameFromIndex(col);
-    _dbManager.updateDataInTable("@(db_table)", KeyValueMap({{col_name, val}}), KeyValueMap({{"id", id}}));
-    return true;
+    bool ret = _dbManager.updateDataInTable("@(db_table)", KeyValueMap({{col_name, val}}), KeyValueMap({{"id", id}}));
+
+    if (ret) {
+        emit @(table_name)Changed();
+    }
+    return ret;
 }

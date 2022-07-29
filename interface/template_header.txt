@@ -28,7 +28,7 @@ public:
         if (@(column["name"])_default) {
             return QVariant();
         }
-        
+
         return  QVariant(@(column["name"]));
     }
 @[end for]
@@ -70,13 +70,57 @@ friend bool operator==(const @(struct_name)& lhs, const @(struct_name)& rhs) {
 }
 };
 
+class @(item_class_name) : public QObject
+{
+    Q_OBJECT
+public:
+    @(item_class_name)(QObject *parent, const @(struct_name) &info) {
+        _info = info;
+    }
+
+    @[for column in column_info]@
+Q_PROPERTY(@(column["qt_type"]) @(column["name"]) READ get_@(column["name"]) WRITE set_@(column["name"]) NOTIFY @(column["name"])Changed);
+    @[end for]
+
+@[for column in column_info]@
+    @(column["qt_type"]) get_@(column["name"])() {
+        return _info.get_@(column["name"])();
+    }
+@[end for]
+
+@[for column in column_info]@
+    void set_@(column["name"])(QVariant val) {
+        if (val != QVariant()) {
+            _info.set_@(column["name"])(val.@(column["conversion"])());
+        }
+        emit @(column["name"])Changed();
+    }
+@[end for]
+
+   @(struct_name) get@(struct_name)() {
+        return _info;
+    }
+
+    signals:
+    @[for column in column_info]@
+        void @(column["name"])Changed();
+    @[end for]
+
+    private:
+    @(struct_name) _info;
+
+
+};
+
 class @(class_name) : public QObject
 {
     Q_OBJECT
 public:
-    @(class_name)(@(database_manager_name)& dbManager);
+    @(class_name)(QObject *parent, @(database_manager_name)& dbManager);
 
     static constexpr int _num_cols = @(len(column_info));
+
+    void init();
 
     static QString getNameFromIndex(int index) {
     if (index == 0) {

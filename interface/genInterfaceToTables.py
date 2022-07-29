@@ -24,10 +24,11 @@ for file_name in all_files:
         print(file_name)
         table_name = file_name.split(".")[0]
         class_name = table_name.capitalize() + "Interface"
+        item_class_name = table_name.capitalize() + "Item1"
         class_header_name = table_name + "interface.hpp"
         database_manager_name = "DbManager"
-        glob = {"db_table" : db_table_name, "database_manager_name" : database_manager_name,"class_name": class_name , "column_info" : column_info, "table_name" : table_name, "class_header_name" : class_header_name, "struct_name" : table_name.capitalize() + "Info"}
-        glob_header = {"db_table" : db_table_name, "database_manager_name" : database_manager_name,"class_name": class_name , "column_info" : column_info, "table_name" : table_name, "class_header_name" : class_header_name, "struct_name" : table_name.capitalize() + "Info"}
+        glob = {"db_table" : db_table_name, "database_manager_name" : database_manager_name,"class_name": class_name , "column_info" : column_info, "table_name" : table_name, "class_header_name" : class_header_name, "struct_name" : table_name.capitalize() + "Info", "item_class_name" : item_class_name}
+        glob_header = {"db_table" : db_table_name, "database_manager_name" : database_manager_name,"class_name": class_name , "column_info" : column_info, "table_name" : table_name, "class_header_name" : class_header_name, "struct_name" : table_name.capitalize() + "Info", "item_class_name" : item_class_name}
         ofile_path = table_name + "interface.cpp"
         ofile_path_header = table_name + "interface.hpp"
         ofile = open(ofile_path, 'w')

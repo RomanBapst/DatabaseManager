@@ -1,7 +1,8 @@
 #include "dbmanager.h"
 #include <QDebug>
 
-DbManager::DbManager()
+DbManager::DbManager(QObject *parent) :
+QObject(parent)
 {
 
 }
