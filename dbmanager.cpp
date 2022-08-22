@@ -328,10 +328,6 @@ bool DbManager::enforLocationIdInDailyRecordsTable()
         }
     }
 
-    for (auto item : location_string_list_without_id) {
-        qInfo() << item;
-    }
-
     // add locations which are not yet present
     for(auto location_string : location_string_list_without_id) {
         success &= query.prepare("SELECT id FROM location WHERE description=?");
@@ -612,8 +608,6 @@ int DbManager::addDataToTable(QString table_name, FilterMap data)
     }
 
     bool res = query.exec();
-
-    qInfo() << query.lastError().text() << query_string;
 
     return query.lastInsertId().toInt();
 }
