@@ -28,7 +28,7 @@ public:
         if (@(column["name"])_default) {
             return QVariant();
         }
-        
+
         return  QVariant(@(column["name"]));
     }
 @[end for]
@@ -111,6 +111,10 @@ public:
     int add@(struct_name)(@(struct_name) info);
 
     @(struct_name) get@(struct_name)ByID(int id) const;
+
+    @(struct_name) getByID(int id) const {
+        return get@(struct_name)ByID(id);
+    }
 
     QList<@(struct_name)> get@(struct_name)By(QString name, QVariant value, QString sort_name = "", QString sqlite_filter="") const;
 
